@@ -118,7 +118,7 @@ class IgorBinaryWave(object):
             self._wave_header.sfB[dimint] = num1
             self._wave_header.sfA[dimint] = num2
         else:  # 'inclusive' scaling
-            raise NotImplementedError('Only per_point scaling supported.')
+            raise NotImplementedError('Only per_point scaling is supported.')
         if units is not None:
             bunits = units.encode('ascii', errors='replace')
             if len(bunits) <= 3:
@@ -141,6 +141,8 @@ class IgorBinaryWave(object):
     def save(self, file: BinaryIO, image=False):
         if not isinstance(self.array, np.ndarray):
             raise ValueError('Please set an array before save')
+        if self.array.ndim > 4:
+            raise ValueError('Dimension of more than 4 is not supported.')
 
         self._wave_header.npnts = len(self.array.ravel())
         self._wave_header.type = TYPES[self.array.dtype.type]
@@ -150,7 +152,7 @@ class IgorBinaryWave(object):
             a = np.transpose(self.array, (1, 0) + tuple(range(2, self.array.ndim)))
         else:
             a = self.array
-        self._wave_header.nDim[:a.ndim] = a.shape
+        self._wave_header.nDim = a.shape + (0,) * (MAXDIMS - a.ndim)
 
         self._bin_header.wfmSize = 320 + self.array.nbytes
 
