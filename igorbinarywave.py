@@ -134,7 +134,10 @@ class IgorBinaryWave(object):
         bunits = units.encode('ascii', errors='replace')
         if len(bunits) <= 3:
             self._wave_header.dataUnits = bunits
+            self._bin_header.dataEUnitsSize = 0
+            self._extended_data_units = b''
         else:
+            self._wave_header.dataUnits = b''
             self._bin_header.dataEUnitsSize = len(bunits) + 1
             self._extended_data_units = bunits + b'\x00'
 
