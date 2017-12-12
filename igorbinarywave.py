@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import ctypes
 import struct
-from typing import Optional
+from typing import Optional, BinaryIO
 import numpy as np
 
 MAXDIMS = 4
@@ -123,7 +123,10 @@ class IgorBinaryWave(object):
             bunits = units.encode('ascii', errors='replace')
             if len(bunits) <= 3:
                 self._wave_header.dimUnits[dimint].value = bunits
+                self._bin_header.dimEUnitsSize[dimint] = 0
+                self._extended_dimension_units[dimint] = b''
             else:
+                self._wave_header.dimUnits[dimint].value = b''
                 self._bin_header.dimEUnitsSize[dimint] = len(bunits) + 1
                 self._extended_dimension_units[dimint] = bunits + b'\x00'
 
@@ -135,15 +138,20 @@ class IgorBinaryWave(object):
             self._bin_header.dataEUnitsSize = len(bunits) + 1
             self._extended_data_units = bunits + b'\x00'
 
-    def save(self, file):
+    def save(self, file: BinaryIO, image=False):
         if not isinstance(self.array, np.ndarray):
             raise ValueError('Please set an array before save')
-        if len(self.array.shape) > 2:
-            raise NotImplementedError('Dimension of more than 3 is not supported.')
+
         self._wave_header.npnts = len(self.array.ravel())
         self._wave_header.type = TYPES[self.array.dtype.type]
-        for idx, dim in enumerate(reversed(self.array.shape)):
-            self._wave_header.nDim[idx] = dim
+
+        if image and self.array.ndim >= 2:
+            # transpose row and column
+            a = np.transpose(self.array, (1, 0) + tuple(range(2, self.array.ndim)))
+        else:
+            a = self.array
+        self._wave_header.nDim[:a.ndim] = a.shape
+
         self._bin_header.wfmSize = 320 + self.array.nbytes
 
         # checksum
@@ -152,7 +160,7 @@ class IgorBinaryWave(object):
 
         file.write(self._bin_header)
         file.write(self._wave_header)
-        file.write(self.array.tobytes())
+        file.write(a.tobytes(order='F'))
 
         file.write(self._extended_data_units)
         for u in self._extended_dimension_units:
