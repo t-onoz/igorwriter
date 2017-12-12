@@ -122,11 +122,11 @@ class IgorBinaryWave(object):
         if units is not None:
             bunits = units.encode('ascii', errors='replace')
             if len(bunits) <= 3:
-                self._wave_header.dimUnits[dimint].value = bunits
+                self._wave_header.dimUnits[dimint][:] = bunits + b'\x00' * (MAX_UNIT_CHARS + 1 - len(bunits))
                 self._bin_header.dimEUnitsSize[dimint] = 0
                 self._extended_dimension_units[dimint] = b''
             else:
-                self._wave_header.dimUnits[dimint].value = b''
+                self._wave_header.dimUnits[dimint][:] = b'\x00' * (MAX_UNIT_CHARS + 1)
                 self._bin_header.dimEUnitsSize[dimint] = len(bunits)
                 self._extended_dimension_units[dimint] = bunits
 
