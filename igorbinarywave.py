@@ -127,8 +127,8 @@ class IgorBinaryWave(object):
                 self._extended_dimension_units[dimint] = b''
             else:
                 self._wave_header.dimUnits[dimint].value = b''
-                self._bin_header.dimEUnitsSize[dimint] = len(bunits) + 1
-                self._extended_dimension_units[dimint] = bunits + b'\x00'
+                self._bin_header.dimEUnitsSize[dimint] = len(bunits)
+                self._extended_dimension_units[dimint] = bunits
 
     def set_datascale(self, units: str):
         bunits = units.encode('ascii', errors='replace')
@@ -138,8 +138,8 @@ class IgorBinaryWave(object):
             self._extended_data_units = b''
         else:
             self._wave_header.dataUnits = b''
-            self._bin_header.dataEUnitsSize = len(bunits) + 1
-            self._extended_data_units = bunits + b'\x00'
+            self._bin_header.dataEUnitsSize = len(bunits)
+            self._extended_data_units = bunits
 
     def save(self, file: BinaryIO, image=False):
         if not isinstance(self.array, np.ndarray):
