@@ -17,7 +17,6 @@ TYPES = {
     np.uint8: 8 + 0x40,
     np.uint16: 0x10 + 0x40,
     np.uint32: 0x20 + 0x40,
-    np.float16: 2,
     np.float32: 2,
     np.float64: 4,
     np.complex64: 2 + 1,
@@ -146,6 +145,9 @@ class IgorBinaryWave(object):
             raise ValueError('Please set an array before save')
         if self.array.ndim > 4:
             raise ValueError('Dimension of more than 4 is not supported.')
+        if self.array.dtype.type is np.float16:
+            # half-precision is not supported by IGOR, so convert to single-precision
+            self.array = self.array.astype(np.float32)
 
         self._wave_header.npnts = len(self.array.ravel())
         self._wave_header.type = TYPES[self.array.dtype.type]
