@@ -11,6 +11,7 @@ MAX_WAVE_NAME5 = 31  # Maximum length of wave name in version 5 files. Does not 
 MAX_UNIT_CHARS = 3
 
 TYPES = {
+    np.bool_: 8,
     np.int8: 8,
     np.int16: 0x10,
     np.int32: 0x20,
@@ -143,23 +144,27 @@ class IgorBinaryWave(object):
     def save(self, file: Union[BinaryIO, str], image=False):
         if not isinstance(self.array, np.ndarray):
             raise ValueError('Please set an array before save')
-        if self.array.ndim > 4:
-            raise ValueError('Dimension of more than 4 is not supported.')
         if self.array.dtype.type is np.float16:
             # half-precision is not supported by IGOR, so convert to single-precision
-            self.array = self.array.astype(np.float32)
-
-        self._wave_header.npnts = len(self.array.ravel())
-        self._wave_header.type = TYPES[self.array.dtype.type]
-
-        if image and self.array.ndim >= 2:
-            # transpose row and column
-            a = np.transpose(self.array, (1, 0) + tuple(range(2, self.array.ndim)))
+            a = self.array.astype(np.float32)
         else:
             a = self.array
+        if a.ndim > 4:
+            raise ValueError('Dimension of more than 4 is not supported.')
+
+        self._wave_header.npnts = len(a.ravel())
+        try:
+            self._wave_header.type = TYPES[a.dtype.type]
+        except KeyError:
+            raise TypeError('Invalid data type of array: %s' % a.dtype.type)
+
+        if image and a.ndim >= 2:
+            # transpose row and column
+            a = np.transpose(a, (1, 0) + tuple(range(2, a.ndim)))
+
         self._wave_header.nDim = a.shape + (0,) * (MAXDIMS - a.ndim)
 
-        self._bin_header.wfmSize = 320 + self.array.nbytes
+        self._bin_header.wfmSize = 320 + a.nbytes
 
         # checksum
         first384bytes = (bytes(self._bin_header) + bytes(self._wave_header))[:384]
