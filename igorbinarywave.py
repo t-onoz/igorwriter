@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import ctypes
 import struct
-from typing import Optional, BinaryIO
+from typing import Optional, BinaryIO, Union
 import numpy as np
 
 MAXDIMS = 4
@@ -140,7 +140,7 @@ class IgorBinaryWave(object):
             self._bin_header.dataEUnitsSize = len(bunits)
             self._extended_data_units = bunits
 
-    def save(self, file: BinaryIO, image=False):
+    def save(self, file: Union[BinaryIO, str], image=False):
         if not isinstance(self.array, np.ndarray):
             raise ValueError('Please set an array before save')
         if self.array.ndim > 4:
@@ -164,6 +164,9 @@ class IgorBinaryWave(object):
         # checksum
         first384bytes = (bytes(self._bin_header) + bytes(self._wave_header))[:384]
         self._bin_header.checksum -= sum(struct.unpack('@192h', first384bytes))
+
+        if not hasattr(file, 'write'):
+            file = open(file, mode='wb')
 
         file.write(self._bin_header)
         file.write(self._wave_header)
