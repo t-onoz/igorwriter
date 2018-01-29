@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 import ctypes
 import struct
-from typing import Optional, BinaryIO, Union
 import numpy as np
 
 MAXDIMS = 4
@@ -22,6 +21,19 @@ TYPES = {
     np.float64: 4,
     np.complex64: 2 + 1,
     np.complex128: 4 + 1,
+}
+ITX_TYPES = {
+    np.bool_: '/B',
+    np.int8: '/B',
+    np.int16: '/W',
+    np.int32: '/I',
+    np.uint8: '/U/B',
+    np.uint16: '/U/W',
+    np.uint32: '/U/I',
+    np.float32: '/S',
+    np.float64: '/D',
+    np.complex64: '/C/S',
+    np.complex128: '/C/D',
 }
 
 
@@ -100,11 +112,11 @@ class WaveHeader5(ctypes.Structure):
         self.sfA = (1,) * MAXDIMS
 
 
-class IgorBinaryWave(object):
-    def __init__(self, array: Optional[np.ndarray]=None, name='wave0'):
+class IgorWave5(object):
+    def __init__(self, array: np.ndarray=None, name='wave0'):
         self._bin_header = BinHeader5()
         self._wave_header = WaveHeader5()
-        self.array = array
+        self.array = np.array([], dtype=float) if array is None else array
         self.rename(name)
         self._extended_data_units = b''
         self._extended_dimension_units = [b'', b'', b'', b'']
@@ -112,13 +124,18 @@ class IgorBinaryWave(object):
     def rename(self, name: str):
         self._wave_header.bname = name.encode('ascii', errors='replace')
 
-    def set_dimscale(self, dim, num1, num2, units: Optional[str]=None, flag='per_point'):
+    def set_dimscale(self, dim, start, delta, units: str=None):
+        """
+
+        :param dim: dimensionality, 'x', 'y', 'z', or 't'
+        :param start: start value (e.g. x[0])
+        :param delta: "delta value" (e.g. x[1] - x[0])
+        :param units: optional unit string
+        :return:
+        """
         dimint = {'x': 0, 'y': 1, 'z': 2, 't': 3}[dim]
-        if flag == 'per_point':
-            self._wave_header.sfB[dimint] = num1
-            self._wave_header.sfA[dimint] = num2
-        else:  # 'inclusive' scaling
-            raise NotImplementedError('Only per_point scaling is supported.')
+        self._wave_header.sfB[dimint] = start
+        self._wave_header.sfA[dimint] = delta
         if units is not None:
             bunits = units.encode('ascii', errors='replace')
             if len(bunits) <= 3:
@@ -141,7 +158,71 @@ class IgorBinaryWave(object):
             self._bin_header.dataEUnitsSize = len(bunits)
             self._extended_data_units = bunits
 
-    def save(self, file: Union[BinaryIO, str], image=False):
+    def save(self, file, image=False):
+        """save data as igor binary wave (.ibw) format.
+
+        :param file: file name or binary-file object.
+        :param image: if True, rows and columns are transposed."""
+        a = self._check_array(image=image)
+
+        self._wave_header.npnts = len(a.ravel())
+        try:
+            self._wave_header.type = TYPES[a.dtype.type]
+        except KeyError:
+            raise TypeError('Invalid data type of array: %s' % a.dtype.type)
+
+        self._wave_header.nDim = a.shape + (0,) * (MAXDIMS - a.ndim)
+
+        self._bin_header.wfmSize = 320 + a.nbytes
+
+        # checksum
+        first384bytes = (bytes(self._bin_header) + bytes(self._wave_header))[:384]
+        self._bin_header.checksum -= sum(struct.unpack('@192h', first384bytes))
+
+        fp = file if hasattr(file, 'write') else open(file, mode='wb')
+        try:
+            fp.write(self._bin_header)
+            fp.write(self._wave_header)
+            fp.write(a.tobytes(order='F'))
+
+            fp.write(self._extended_data_units)
+            for u in self._extended_dimension_units:
+                fp.write(u)
+        finally:
+            if fp is not file:
+                fp.close()
+
+    def save_itx(self, file, image=False) -> str:
+        array = self._check_array(image=image)
+        name = self._wave_header.bname.decode()
+
+        fp = file if hasattr(file, 'write') else open(file, mode='w')
+        try:
+            if fp.tell() == 0:
+                fp.write('IGOR\n')
+            fp.write("WAVES {typ} /N=({shape}) '{name}'\n".format(
+                typ=ITX_TYPES[array.dtype.type],
+                shape=','.join(str(x) for x in array.shape),
+                name=name
+            ))
+            fp.write('BEGIN\n')
+            fp.write('\t'.join(str(x) for x in array.ravel(order='C')))
+            fp.write('\nEND\n')
+            fp.write('X SetScale d,0,0,"{units}",\'{name}\'\n'.format(
+                units=(self._wave_header.dataUnits or self._extended_data_units).decode(),
+                name=name
+            ))
+            for idx, dim in enumerate(('x', 'y', 'z', 't')):
+                fp.write('X SetScale /P {dim},{start},{delta},"{units}",\'{name}\'\n'.format(
+                    dim=dim, start=self._wave_header.sfB[idx], delta=self._wave_header.sfA[idx],
+                    units=(self._wave_header.dimUnits[idx][:] or self._extended_dimension_units[idx]).decode().replace('\x00', ''),
+                    name=name
+                ))
+        finally:
+            if fp is not file:
+                fp.close()
+
+    def _check_array(self, image=False) -> np.ndarray:
         if not isinstance(self.array, np.ndarray):
             raise ValueError('Please set an array before save')
         if self.array.dtype.type is np.float16:
@@ -152,34 +233,11 @@ class IgorBinaryWave(object):
         if a.ndim > 4:
             raise ValueError('Dimension of more than 4 is not supported.')
 
-        self._wave_header.npnts = len(a.ravel())
-        try:
-            self._wave_header.type = TYPES[a.dtype.type]
-        except KeyError:
-            raise TypeError('Invalid data type of array: %s' % a.dtype.type)
-
         if image and a.ndim >= 2:
             # transpose row and column
             a = np.transpose(a, (1, 0) + tuple(range(2, a.ndim)))
 
-        self._wave_header.nDim = a.shape + (0,) * (MAXDIMS - a.ndim)
-
-        self._bin_header.wfmSize = 320 + a.nbytes
-
-        # checksum
-        first384bytes = (bytes(self._bin_header) + bytes(self._wave_header))[:384]
-        self._bin_header.checksum -= sum(struct.unpack('@192h', first384bytes))
-
-        if not hasattr(file, 'write'):
-            file = open(file, mode='wb')
-
-        file.write(self._bin_header)
-        file.write(self._wave_header)
-        file.write(a.tobytes(order='F'))
-
-        file.write(self._extended_data_units)
-        for u in self._extended_dimension_units:
-            file.write(u)
+        return a
 
     @staticmethod
     def load(self, file):
