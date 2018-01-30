@@ -1,5 +1,5 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+from __future__ import print_function, unicode_literals
 import ctypes
 import struct
 import numpy as np
@@ -48,13 +48,13 @@ class BinHeader5(ctypes.Structure):
         ('dataEUnitsSize', ctypes.c_int32),				    # The size of optional extended data units.
         ('dimEUnitsSize', ctypes.c_int32 * MAXDIMS),		# The size of optional extended dimension units.
         ('dimLabelsSize', ctypes.c_int32 * MAXDIMS),		# The size of optional dimension labels.
-        ('sIndicesSize', ctypes.c_int32),					# The size of string indicies if this is a text wave.
+        ('sIndicesSize', ctypes.c_int32),					# The size of string indices if this is a text wave.
         ('optionsSize1', ctypes.c_int32),					# Reserved. Write zero. Ignore on read.
         ('optionsSize2', ctypes.c_int32),					# Reserved. Write zero. Ignore on read.
     ]
 
     def __init__(self):
-        super().__init__()
+        super(BinHeader5, self).__init__()
         self.version = 5
 
 
@@ -108,12 +108,12 @@ class WaveHeader5(ctypes.Structure):
     ]
 
     def __init__(self):
-        super().__init__()
+        super(WaveHeader5, self).__init__()
         self.sfA = (1,) * MAXDIMS
 
 
 class IgorWave5(object):
-    def __init__(self, array: np.ndarray=None, name='wave0'):
+    def __init__(self, array, name='wave0'):
         self._bin_header = BinHeader5()
         self._wave_header = WaveHeader5()
         self.array = np.array([], dtype=float) if array is None else array
@@ -121,10 +121,10 @@ class IgorWave5(object):
         self._extended_data_units = b''
         self._extended_dimension_units = [b'', b'', b'', b'']
     
-    def rename(self, name: str):
+    def rename(self, name):
         self._wave_header.bname = name.encode('ascii', errors='replace')
 
-    def set_dimscale(self, dim, start, delta, units: str=None):
+    def set_dimscale(self, dim, start, delta, units=None):
         """
 
         :param dim: dimensionality, 'x', 'y', 'z', or 't'
@@ -147,7 +147,7 @@ class IgorWave5(object):
                 self._bin_header.dimEUnitsSize[dimint] = len(bunits)
                 self._extended_dimension_units[dimint] = bunits
 
-    def set_datascale(self, units: str):
+    def set_datascale(self, units):
         bunits = units.encode('ascii', errors='replace')
         if len(bunits) <= 3:
             self._wave_header.dataUnits = bunits
@@ -176,10 +176,12 @@ class IgorWave5(object):
         self._bin_header.wfmSize = 320 + a.nbytes
 
         # checksum
-        first384bytes = (bytes(self._bin_header) + bytes(self._wave_header))[:384]
+        first384bytes = (bytearray(self._bin_header) + bytearray(self._wave_header))[:384]
         self._bin_header.checksum -= sum(struct.unpack('@192h', first384bytes))
 
         fp = file if hasattr(file, 'write') else open(file, mode='wb')
+        if fp.tell() > 0:
+            raise ValueError('You can only save() into an empty file.')
         try:
             fp.write(self._bin_header)
             fp.write(self._wave_header)
@@ -192,7 +194,7 @@ class IgorWave5(object):
             if fp is not file:
                 fp.close()
 
-    def save_itx(self, file, image=False) -> str:
+    def save_itx(self, file, image=False):
         array = self._check_array(image=image)
         name = self._wave_header.bname.decode()
 
@@ -206,8 +208,23 @@ class IgorWave5(object):
                 name=name
             ))
             fp.write('BEGIN\n')
-            fp.write('\t'.join(str(x) for x in array.ravel(order='C')))
-            fp.write('\nEND\n')
+            if np.iscomplexobj(array):
+                def str_(x):
+                    return '%s\t%s' % (x.real, x.imag)
+            else:
+                str_ = str
+            # write in column/row/layer/chunk order
+            expanded = array
+            while expanded.ndim < 4:
+                expanded = np.expand_dims(expanded, expanded.ndim)
+            for chunk in range(expanded.shape[3]):
+                for layer in range(expanded.shape[2]):
+                    for row in range(expanded.shape[0]):
+                        fp.write('\t'.join(str_(x) for x in expanded[row, :, layer, chunk]))
+                        fp.write('\n')
+                    fp.write('\n')
+                fp.write('\n')
+            fp.write('END\n')
             fp.write('X SetScale d,0,0,"{units}",\'{name}\'\n'.format(
                 units=(self._wave_header.dataUnits or self._extended_data_units).decode(),
                 name=name
@@ -222,7 +239,7 @@ class IgorWave5(object):
             if fp is not file:
                 fp.close()
 
-    def _check_array(self, image=False) -> np.ndarray:
+    def _check_array(self, image=False):
         if not isinstance(self.array, np.ndarray):
             raise ValueError('Please set an array before save')
         if self.array.dtype.type is np.float16:
