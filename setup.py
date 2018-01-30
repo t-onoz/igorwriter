@@ -15,6 +15,7 @@ setup(
     name='igorwriter',
     version='0.1.0',
     description='Write IGOR binary (.ibw) or text (.itx) files from numpy array',
+    long_description=long_description,
     url='https://github.com/t-onoz/igorwriter',
     author='t-onoz',
     license='MIT',
