@@ -116,7 +116,12 @@ class IgorWave5(object):
     def __init__(self, array, name='wave0'):
         self._bin_header = BinHeader5()
         self._wave_header = WaveHeader5()
-        self.array = np.array([], dtype=float) if array is None else array
+        if array is None:
+            self.array = np.array([], dtype=float)
+        elif isinstance(array, np.ndarray):
+            self.array = array
+        else:
+            self.array = np.array(array)
         self.rename(name)
         self._extended_data_units = b''
         self._extended_dimension_units = [b'', b'', b'', b'']
@@ -125,7 +130,7 @@ class IgorWave5(object):
         self._wave_header.bname = name.encode('ascii', errors='replace')
 
     def set_dimscale(self, dim, start, delta, units=None):
-        """
+        """Set scale information of each axis.
 
         :param dim: dimensionality, 'x', 'y', 'z', or 't'
         :param start: start value (e.g. x[0])
@@ -148,6 +153,10 @@ class IgorWave5(object):
                 self._extended_dimension_units[dimint] = bunits
 
     def set_datascale(self, units):
+        """Set units of the data.
+
+        :param units: string representing units of the data.
+        """
         bunits = units.encode('ascii', errors='replace')
         if len(bunits) <= 3:
             self._wave_header.dataUnits = bunits
@@ -195,6 +204,10 @@ class IgorWave5(object):
                 fp.close()
 
     def save_itx(self, file, image=False):
+        """save data as igor text (.itx) format.
+
+        :param file: file name or text-file object.
+        :param image: if True, rows and columns are transposed."""
         array = self._check_array(image=image)
         name = self._wave_header.bname.decode()
 
@@ -259,3 +272,6 @@ class IgorWave5(object):
     @staticmethod
     def load(self, file):
         raise NotImplementedError
+
+
+IgorWave = IgorWave5
