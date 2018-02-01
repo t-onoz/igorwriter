@@ -242,7 +242,7 @@ class IgorWave5(object):
                 units=(self._wave_header.dataUnits or self._extended_data_units).decode(),
                 name=name
             ))
-            for idx, dim in enumerate(('x', 'y', 'z', 't')):
+            for idx, dim in list(enumerate(('x', 'y', 'z', 't')))[:array.ndim]:
                 fp.write('X SetScale /P {dim},{start},{delta},"{units}",\'{name}\'\n'.format(
                     dim=dim, start=self._wave_header.sfB[idx], delta=self._wave_header.sfA[idx],
                     units=(self._wave_header.dimUnits[idx][:] or self._extended_dimension_units[idx]).decode().replace('\x00', ''),
