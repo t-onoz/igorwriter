@@ -7,8 +7,10 @@ Usage
 -----
     >>> import numpy as np
     >>> from igorwriter import IgorWave
-    >>> array = np.array([[1,2,3],[4,5,6]])
+    >>> array = np.array([1,2,3,4,5,6])
     >>> wave = IgorWave(array, name='mywave')
+    >>> wave.set_datascale('DataUnit')
+    >>> wave.set_dimscale('x', 0, 0.01, 's')  # set x scale information
     >>> wave.save('mywave.ibw')
     >>> wave.save_itx('mywave.itx')
 
