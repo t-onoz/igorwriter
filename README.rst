@@ -3,6 +3,10 @@ IgorWriter
 
 Write IGOR binary (.ibw) or text (.itx) files from numpy array
 
+Installation
+------------
+    $ pip install igorwriter
+
 Usage
 -----
     >>> import numpy as np
