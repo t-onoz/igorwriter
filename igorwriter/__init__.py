@@ -178,10 +178,7 @@ class IgorWave5(object):
         a = self._check_array(image=image)
 
         self._wave_header.npnts = len(a.ravel())
-        try:
-            self._wave_header.type = TYPES[a.dtype.type]
-        except KeyError:
-            raise TypeError('Invalid data type of array: %s' % a.dtype.type)
+        self._wave_header.type = TYPES[a.dtype.type]
 
         self._wave_header.nDim = a.shape + (0,) * (MAXDIMS - a.ndim)
 
@@ -263,6 +260,8 @@ class IgorWave5(object):
             a = self.array.astype(np.float32)
         else:
             a = self.array
+        if self.array.dtype.type not in TYPES:
+            raise TypeError('Unsupported dtype: %r' % self.array.dtype.type)
         if a.ndim > 4:
             raise ValueError('Dimension of more than 4 is not supported.')
 
