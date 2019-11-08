@@ -2,7 +2,11 @@ try:
     import unittest2 as unittest
 except ImportError:
     import unittest
-from tempfile import TemporaryFile
+try:
+    from tempfile import TemporaryFile, TemporaryDirectory
+except ImportError:
+    from tempfile import TemporaryFile
+    from backports.tempfile import TemporaryDirectory
 
 import numpy as np
 
@@ -10,6 +14,27 @@ from igorwriter import IgorWave, validator
 
 
 class WaveTestCase(unittest.TestCase):
+    def test_file_io(self):
+        array = np.random.randint(0, 100, 10, dtype=np.int32)
+        wave = IgorWave(array)
+        with TemporaryDirectory() as datadir:
+            itx = datadir + '/wave0.itx'
+            ibw = datadir + '/wave0.ibw'
+            wave.save_itx(itx)
+            with open(itx, 'w') as fp:
+                wave.save_itx(fp)
+
+            wave.save(ibw)
+            with open(ibw, 'wb') as fp:
+                wave.save(fp)
+
+            with open(ibw, 'wb') as fp:
+                fp.write(b'something')
+                self.assertRaises(ValueError, wave.save, fp)
+            with open(ibw, 'ab') as fp:
+                self.assertRaises(ValueError, wave.save, fp)
+
+
     def test_array_type(self):
         valid_types = (np.bool_, np.int32, np.uint32,  np.float32, np.float64, np.complex128)
         invalid_types = (np.float16, np.int64, object, str)
