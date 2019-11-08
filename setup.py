@@ -36,10 +36,11 @@ setup(
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
     ],
 
-    py_modules=["igorwriter"],
-    # packages=find_packages(exclude=['contrib', 'docs', 'tests']),  # Required
+    packages=find_packages(),
 
     install_requires=['numpy'],  # Optional
 )
