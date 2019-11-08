@@ -277,5 +277,8 @@ class IgorWave5(object):
     def load(self, file):
         raise NotImplementedError
 
+    def __repr__(self):
+        return '<IgorWave \'%s\' at %s>' % (self._wave_header.bname.decode(ENCODING), hex(id(self)))
+
 
 IgorWave = IgorWave5
