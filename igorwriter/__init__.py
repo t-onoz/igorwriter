@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
+import locale
 import ctypes
 import struct
 import numpy as np
@@ -8,6 +9,8 @@ MAXDIMS = 4
 MAX_WAVE_NAME2 = 18  # Maximum length of wave name in version 1 and 2 files. Does not include the trailing null.
 MAX_WAVE_NAME5 = 31  # Maximum length of wave name in version 5 files. Does not include the trailing null.
 MAX_UNIT_CHARS = 3
+
+ENCODING = locale.getpreferredencoding()
 
 TYPES = {
     np.bool_: 8,
@@ -127,7 +130,7 @@ class IgorWave5(object):
         self._extended_dimension_units = [b'', b'', b'', b'']
     
     def rename(self, name):
-        self._wave_header.bname = name.encode('ascii', errors='replace')
+        self._wave_header.bname = name.encode(ENCODING)
 
     def set_dimscale(self, dim, start, delta, units=None):
         """Set scale information of each axis.
