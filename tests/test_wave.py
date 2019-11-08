@@ -36,8 +36,8 @@ class WaveTestCase(unittest.TestCase):
 
 
     def test_array_type(self):
-        valid_types = (np.bool_, np.int32, np.uint32,  np.float32, np.float64, np.complex128)
-        invalid_types = (np.float16, np.int64, object, str)
+        valid_types = (np.bool_, np.float16, np.int32, np.uint32,  np.float32, np.float64, np.complex128)
+        invalid_types = (np.int64, object, str)
         array = np.random.randint(0, 100, 10)
         for vt in valid_types:
             wave = IgorWave(array.astype(vt))

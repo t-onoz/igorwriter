@@ -281,8 +281,8 @@ class IgorWave5(object):
             a = self.array.astype(np.float32)
         else:
             a = self.array
-        if self.array.dtype.type not in TYPES:
-            raise TypeError('Unsupported dtype: %r' % self.array.dtype.type)
+        if a.dtype.type not in TYPES:
+            raise TypeError('Unsupported dtype: %r' % a.dtype.type)
         if a.ndim > 4:
             raise ValueError('Dimension of more than 4 is not supported.')
 
