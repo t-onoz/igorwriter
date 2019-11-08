@@ -8,7 +8,7 @@ from igorwriter import IgorWave5
 def demo():
     os.makedirs('./igor', exist_ok=True)
     a = np.arange(2*3*4*5)
-    for typ in (int, float, complex):
+    for typ in (np.int32, np.float64, np.complex128):
         a_ = a.astype(typ)
         w1 = IgorWave5(a_, '%s_1d' % typ.__name__)
         w2 = IgorWave5(a_.reshape((2, -1)), '%s_2d' % typ.__name__)
