@@ -145,8 +145,8 @@ class IgorWave5(object):
         self._wave_header.sfB[dimint] = start
         self._wave_header.sfA[dimint] = delta
         if units is not None:
-            bunits = units.encode('ascii', errors='replace')
-            if len(bunits) <= 3:
+            bunits = units.encode(ENCODING)
+            if len(bunits) <= MAX_UNIT_CHARS:
                 self._wave_header.dimUnits[dimint][:] = bunits + b'\x00' * (MAX_UNIT_CHARS + 1 - len(bunits))
                 self._bin_header.dimEUnitsSize[dimint] = 0
                 self._extended_dimension_units[dimint] = b''
@@ -161,7 +161,7 @@ class IgorWave5(object):
         :param units: string representing units of the data.
         """
         bunits = units.encode('ascii', errors='replace')
-        if len(bunits) <= 3:
+        if len(bunits) <= MAX_UNIT_CHARS:
             self._wave_header.dataUnits = bunits
             self._bin_header.dataEUnitsSize = 0
             self._extended_data_units = b''
@@ -243,9 +243,11 @@ class IgorWave5(object):
                 name=name
             ))
             for idx, dim in list(enumerate(('x', 'y', 'z', 't')))[:array.ndim]:
+                dimUnits = self._wave_header.dimUnits[idx][:]
+                bunits = dimUnits.replace(b'\x00', b'') or self._extended_dimension_units[idx]
                 fp.write('X SetScale /P {dim},{start},{delta},"{units}",\'{name}\'\n'.format(
                     dim=dim, start=self._wave_header.sfB[idx], delta=self._wave_header.sfA[idx],
-                    units=(self._wave_header.dimUnits[idx][:] or self._extended_dimension_units[idx]).decode().replace('\x00', ''),
+                    units=bunits.decode(ENCODING),
                     name=name
                 ))
         finally:
