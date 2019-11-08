@@ -41,6 +41,9 @@ setup(
     ],
 
     packages=find_packages(),
+    package_data={
+        'igorwriter': ['builtins/*.txt']
+    },
 
     install_requires=['numpy'],  # Optional
 )

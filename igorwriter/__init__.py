@@ -5,6 +5,8 @@ import ctypes
 import struct
 import numpy as np
 
+from igorwriter import validator
+
 MAXDIMS = 4
 MAX_WAVE_NAME2 = 18  # Maximum length of wave name in version 1 and 2 files. Does not include the trailing null.
 MAX_WAVE_NAME5 = 31  # Maximum length of wave name in version 5 files. Does not include the trailing null.
@@ -116,7 +118,13 @@ class WaveHeader5(ctypes.Structure):
 
 
 class IgorWave5(object):
-    def __init__(self, array, name='wave0'):
+    def __init__(self, array, name='wave0', on_errors='fix'):
+        """
+
+        :param array: numpy.ndarray object
+        :param name: wave name
+        :param errors: behavior when invalid name is given. 'fix': fix errors. 'raise': raise exception.
+        """
         self._bin_header = BinHeader5()
         self._wave_header = WaveHeader5()
         if array is None:
@@ -125,12 +133,23 @@ class IgorWave5(object):
             self.array = array
         else:
             self.array = np.array(array)
-        self.rename(name)
+        self.rename(name, on_errors=on_errors)
         self._extended_data_units = b''
         self._extended_dimension_units = [b'', b'', b'', b'']
     
-    def rename(self, name):
-        self._wave_header.bname = name.encode(ENCODING)
+    def rename(self, name, on_errors='fix'):
+        """
+
+        :param name: new wavename.
+        :param on_errors: behavior when invalid name is given. 'fix': fix errors. 'raise': raise exception.
+        :return:
+        """
+        bname = validator.check_and_encode(name, on_errors=on_errors)
+        self._wave_header.bname = bname
+
+    @property
+    def name(self):
+        return self._wave_header.bname.decode(ENCODING)
 
     def set_dimscale(self, dim, start, delta, units=None):
         """Set scale information of each axis.
@@ -278,7 +297,7 @@ class IgorWave5(object):
         raise NotImplementedError
 
     def __repr__(self):
-        return '<IgorWave \'%s\' at %s>' % (self._wave_header.bname.decode(ENCODING), hex(id(self)))
+        return '<IgorWave \'%s\' at %s>' % (self.name, hex(id(self)))
 
 
 IgorWave = IgorWave5

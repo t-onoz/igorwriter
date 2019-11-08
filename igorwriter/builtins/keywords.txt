@@ -1,0 +1,17 @@
+break
+case
+catch
+continue
+do
+else
+elseif
+end
+endfor
+endif
+endswitch
+endtry
+for
+if
+strswitch
+switch
+while

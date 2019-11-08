@@ -6,7 +6,7 @@ from tempfile import TemporaryFile
 
 import numpy as np
 
-from igorwriter import IgorWave
+from igorwriter import IgorWave, validator
 
 
 class WaveTestCase(unittest.TestCase):
@@ -71,6 +71,14 @@ class WaveTestCase(unittest.TestCase):
                     fp.seek(0)
                     content = fp.read()
                     self.assertRegex(content, com)
+
+    def test_invalid_name(self):
+        name = '\'invalid_name\''  # wave cannot contain quotation marks
+        array = np.random.randint(0, 100, 10, dtype=np.int32)
+        wave = IgorWave(array)
+        self.assertRaises(validator.InvalidNameError, wave.rename, name, on_errors='raise')
+        wave.rename(name, on_errors='fix')
+        self.assertEqual(wave.name, name.replace('\'', '_'))
 
 
 if __name__ == '__main__':
