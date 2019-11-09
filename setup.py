@@ -13,7 +13,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 
 setup(
     name='igorwriter',
-    version='0.2.2',
+    version='0.2.3',
     description='Write IGOR binary (.ibw) or text (.itx) files from numpy array',
     long_description=long_description,
     url='https://github.com/t-onoz/igorwriter',
