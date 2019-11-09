@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
+import os
 import locale
 import ctypes
 import struct
@@ -208,6 +209,7 @@ class IgorWave5(object):
         self._bin_header.checksum -= sum(struct.unpack('@192h', first384bytes))
 
         fp = file if hasattr(file, 'write') else open(file, mode='wb')
+        fp.seek(0, os.SEEK_END)
         if fp.tell() > 0:
             raise ValueError('You can only save() into an empty file.')
         try:

@@ -25,14 +25,18 @@ class WaveTestCase(unittest.TestCase):
                 wave.save_itx(fp)
 
             wave.save(ibw)
-            with open(ibw, 'wb') as fp:
-                wave.save(fp)
-
-            with open(ibw, 'wb') as fp:
-                fp.write(b'something')
-                self.assertRaises(ValueError, wave.save, fp)
-            with open(ibw, 'ab') as fp:
-                self.assertRaises(ValueError, wave.save, fp)
+            with self.subTest('save in a new binary file'):
+                with open(ibw, 'wb') as fp:
+                    wave.save(fp)
+            with self.subTest('append to a binary should fail'):
+                with open(ibw, 'wb') as fp:
+                    fp.write(b'something')
+                    self.assertRaises(ValueError, wave.save, fp)
+                with open(ibw, 'ab') as fp:
+                    self.assertRaises(ValueError, wave.save, fp)
+            with self.subTest('save in a truncated binary file'):
+                with open(ibw, 'wb') as fp:
+                    wave.save(fp)
 
     def test_array_type(self):
         valid_types = (np.bool_, np.float16, np.int32, np.uint32, np.int64, np.uint64, np.float32, np.float64, np.complex128)
