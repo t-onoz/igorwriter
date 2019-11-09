@@ -13,8 +13,7 @@ Usage
 -----
 >>> import numpy as np
 >>> from igorwriter import IgorWave
->>> # 64-bit integer is not supported in this package. Use np.int32, which is the default integer type for win64
->>> array = np.array([1,2,3,4,5,6], dtype=np.int32)
+>>> array = np.array([1,2,3,4,5,6])
 >>> wave = IgorWave(array, name='mywave')
 >>> wave2 = IgorWave(array.astype(np.float32), name='mywave2')
 >>> wave.set_datascale('DataUnit')

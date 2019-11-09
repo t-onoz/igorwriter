@@ -34,23 +34,23 @@ class WaveTestCase(unittest.TestCase):
             with open(ibw, 'ab') as fp:
                 self.assertRaises(ValueError, wave.save, fp)
 
-
     def test_array_type(self):
-        valid_types = (np.bool_, np.float16, np.int32, np.uint32,  np.float32, np.float64, np.complex128)
-        invalid_types = (np.int64, object, str)
-        array = np.random.randint(0, 100, 10)
+        valid_types = (np.bool_, np.float16, np.int32, np.uint32, np.int64, np.uint64, np.float32, np.float64, np.complex128)
+        invalid_types = (object, str)
         for vt in valid_types:
-            wave = IgorWave(array.astype(vt))
-            with TemporaryFile('wb') as fp:
-                wave.save(fp)
-            with TemporaryFile('wt') as fp:
-                wave.save_itx(fp)
+            with self.subTest('type: %r' % vt):
+                wave = IgorWave(np.random.randint(0, 100, 10).astype(vt))
+                with TemporaryFile('wb') as fp:
+                    wave.save(fp)
+                with TemporaryFile('wt') as fp:
+                    wave.save_itx(fp)
         for it in invalid_types:
-            wave = IgorWave(array.astype(it))
-            with TemporaryFile('wb') as fp:
-                self.assertRaises(TypeError, wave.save, fp)
-            with TemporaryFile('wt') as fp:
-                self.assertRaises(TypeError, wave.save_itx, fp)
+            with self.subTest('type: %r' % it):
+                wave = IgorWave(np.random.randint(0, 100, 10).astype(it))
+                with TemporaryFile('wb') as fp:
+                    self.assertRaises(TypeError, wave.save, fp)
+                with TemporaryFile('wt') as fp:
+                    self.assertRaises(TypeError, wave.save_itx, fp)
 
     def test_dimscale(self):
         array = np.random.randint(0, 100, 10, dtype=np.int32)

@@ -276,11 +276,7 @@ class IgorWave5(object):
     def _check_array(self, image=False):
         if not isinstance(self.array, np.ndarray):
             raise ValueError('Please set an array before save')
-        if self.array.dtype.type is np.float16:
-            # half-precision is not supported by IGOR, so convert to single-precision
-            a = self.array.astype(np.float32)
-        else:
-            a = self.array
+        a = self._cast_array(self.array)
         if a.dtype.type not in TYPES:
             raise TypeError('Unsupported dtype: %r' % a.dtype.type)
         if a.ndim > 4:
@@ -291,6 +287,21 @@ class IgorWave5(object):
             a = np.transpose(a, (1, 0) + tuple(range(2, a.ndim)))
 
         return a
+
+    @staticmethod
+    def _cast_array(array):
+        # check array dtype and try type casting if necessary
+        type_ = array.dtype.type
+        if type_ is np.float16:
+            return array.astype(np.float32)
+        for from_, to_ in {np.int64: np.int32, np.uint64: np.uint32}.items():
+            if type_ is from_:
+                type_info = np.iinfo(to_)
+                if np.all((array >= type_info.min) & (array <= type_info.max)):
+                    return array.astype(to_)
+                else:
+                    raise TypeError('Cast from %r to %r failed.' % (type_, to_))
+        return array
 
     @staticmethod
     def load(self, file):
