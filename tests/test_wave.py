@@ -10,7 +10,7 @@ except ImportError:
 
 import numpy as np
 
-from igorwriter import IgorWave, validator
+from igorwriter import IgorWave, validator, ENCODING
 
 
 class WaveTestCase(unittest.TestCase):
@@ -22,6 +22,22 @@ class WaveTestCase(unittest.TestCase):
             wave.save(bin)
             wave.save_itx(text)
 
+    def test_pint(self):
+        import pint
+        ureg = pint.UnitRegistry()
+        Q = ureg.Quantity
+        a = np.arange(0.0, 10.0, 1.0)
+        with self.subTest('short units'):
+            wave = IgorWave(Q(a, 's'))
+            bunits = wave._wave_header.dataUnits
+            expected = 's'.encode(ENCODING)
+            self.assertEqual(bunits, expected)
+        with self.subTest('long units'):
+            q = Q(a, 'kg m / s**2')
+            wave = IgorWave(q)
+            bunits = wave._extended_data_units
+            expected = '{:~}'.format(q.units).encode(ENCODING)
+            self.assertEqual(bunits, expected)
 
     def test_file_io(self):
         array = np.random.randint(0, 100, 10, dtype=np.int32)

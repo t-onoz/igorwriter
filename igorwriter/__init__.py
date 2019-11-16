@@ -137,6 +137,11 @@ class IgorWave5(object):
         self.rename(name, on_errors=on_errors)
         self._extended_data_units = b''
         self._extended_dimension_units = [b'', b'', b'', b'']
+        try:
+            # set units for pint.quantity._Quantity
+            self.set_datascale('{:~}'.format(array.units))
+        except (ValueError, AttributeError):
+            pass
     
     def rename(self, name, on_errors='fix'):
         """
