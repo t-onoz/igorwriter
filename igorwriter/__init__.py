@@ -278,7 +278,7 @@ class IgorWave5(object):
     def _check_array(self, image=False):
         if not isinstance(self.array, np.ndarray):
             raise ValueError('Please set an array before save')
-        a = self._cast_array(self.array)
+        a = self._cast_array()
         if a.dtype.type not in TYPES:
             raise TypeError('Unsupported dtype: %r' % a.dtype.type)
         if a.ndim > 4:
@@ -287,23 +287,24 @@ class IgorWave5(object):
         if image and a.ndim >= 2:
             # transpose row and column
             a = np.transpose(a, (1, 0) + tuple(range(2, a.ndim)))
-
         return a
 
-    @staticmethod
-    def _cast_array(array):
+    def _cast_array(self):
         # check array dtype and try type casting if necessary
-        type_ = array.dtype.type
+        type_ = self.array.dtype.type
         if type_ is np.float16:
-            return array.astype(np.float32)
+            return self.array.astype(np.float32)
+        if type_ is np.datetime64:
+            self.set_datascale('dat')
+            return (self.array - np.datetime64('1904-01-01 00:00:00')) / np.timedelta64(1, 's')
         for from_, to_ in {np.int64: np.int32, np.uint64: np.uint32}.items():
             if type_ is from_:
                 type_info = np.iinfo(to_)
-                if np.all((array >= type_info.min) & (array <= type_info.max)):
-                    return array.astype(to_)
+                if np.all((self.array >= type_info.min) & (self.array <= type_info.max)):
+                    return self.array.astype(to_)
                 else:
                     raise TypeError('Cast from %r to %r failed.' % (type_, to_))
-        return array
+        return self.array
 
     @staticmethod
     def load(self, file):

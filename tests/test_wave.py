@@ -14,6 +14,15 @@ from igorwriter import IgorWave, validator
 
 
 class WaveTestCase(unittest.TestCase):
+    def test_datetime(self):
+        array = np.arange(np.datetime64('2019-01-01'), np.datetime64('2019-12-31'), np.timedelta64(1, 'D'))
+        wave = IgorWave(array)
+        self.assertIs(wave._check_array().dtype.type, np.float64)
+        with TemporaryFile('wb') as bin, TemporaryFile('wt') as text:
+            wave.save(bin)
+            wave.save_itx(text)
+
+
     def test_file_io(self):
         array = np.random.randint(0, 100, 10, dtype=np.int32)
         wave = IgorWave(array)
