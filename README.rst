@@ -60,3 +60,30 @@ If you use e.g.
 >>> wave.save('path.ibw', image=True)
     
 :code:`plt.imshow` and Image Plot will give the same results.
+
+
+Changelog
+=========
+
+
+v0.3.0 (2019-11-16)
+-------------------
+- Added :code:`utils.dict_to_{ibw, itx}` 
+- Set datascale automatically for pint Quantity object.
+- Added support for np.datetime64 array.
+
+
+v0.2.3 (2019-11-09)
+-------------------
+- Added support for 64-bit integers (by automatically casting onto 32-bit integers on save). 
+
+
+v0.2.0 (2019-11-08)
+-------------------
+- Added utilities for pandas (:code:`utils.dataframe_to_{ibw, itx}` ).
+- Added unittest scripts. 
+- Added wave name validator. 
+- BUG FIX: long (> 3 bytes) units for dimension scaling were ignored in
+  save_itx() 
+- IgorWriter now uses system locale encoding rather than ASCII (the default behavior of
+  IGOR Pro prior to ver. 7.00) 
