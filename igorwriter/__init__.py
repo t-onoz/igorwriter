@@ -122,18 +122,13 @@ class IgorWave5(object):
     def __init__(self, array, name='wave0', on_errors='fix'):
         """
 
-        :param array: numpy.ndarray object
+        :param array: array_like object
         :param name: wave name
-        :param errors: behavior when invalid name is given. 'fix': fix errors. 'raise': raise exception.
+        :param on_errors: behavior when invalid name is given. 'fix': fix errors. 'raise': raise exception.
         """
         self._bin_header = BinHeader5()
         self._wave_header = WaveHeader5()
-        if array is None:
-            self.array = np.array([], dtype=float)
-        elif isinstance(array, np.ndarray):
-            self.array = array
-        else:
-            self.array = np.array(array)
+        self.array = np.asarray(array)
         self.rename(name, on_errors=on_errors)
         self._extended_data_units = b''
         self._extended_dimension_units = [b'', b'', b'', b'']

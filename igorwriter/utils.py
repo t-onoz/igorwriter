@@ -16,7 +16,7 @@ def dataframe_to_itx(dataframe, path_or_buf, on_errors='fix'):
     fp = path_or_buf if hasattr(path_or_buf, 'write') else open(path_or_buf, 'w', encoding=igorwriter.ENCODING)
     try:
         for column, series in dataframe.items():
-            wave = IgorWave(series.to_numpy(), column, on_errors=on_errors)
+            wave = IgorWave(series, column, on_errors=on_errors)
             waves[column] = wave
             wave.save_itx(fp)
     finally:
@@ -35,7 +35,7 @@ def dataframe_to_ibw(dataframe, prefix, on_errors='fix'):
     """
     waves = dict()
     for column, series in dataframe.items():
-        wave = IgorWave(series.to_numpy(), column, on_errors=on_errors)
+        wave = IgorWave(series, column, on_errors=on_errors)
         wave.save(str(prefix) + '_%s.ibw' % column)
         waves[column] = wave
     return waves
