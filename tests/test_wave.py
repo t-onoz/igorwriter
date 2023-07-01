@@ -6,7 +6,8 @@ from pathlib import Path
 import numpy as np
 
 import igorwriter.errors
-from igorwriter import IgorWave, validator, ENCODING
+from igorwriter import IgorWave
+from igorwriter.igorwave import ENCODING
 from igorwriter.errors import TypeConversionWarning
 
 OUTDIR = Path(os.path.dirname(os.path.abspath(__file__))) / 'out'
