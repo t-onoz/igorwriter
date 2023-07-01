@@ -5,6 +5,12 @@ import locale
 import ctypes
 import struct
 import numpy as np
+try:
+    from pint.errors import UnitStrippedWarning
+except ImportError:
+    class UnitStrippedWarning(UserWarning):
+        pass
+import warnings
 
 from igorwriter import validator
 
@@ -128,7 +134,9 @@ class IgorWave5(object):
         """
         self._bin_header = BinHeader5()
         self._wave_header = WaveHeader5()
-        self.array = np.asarray(array)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', category=UnitStrippedWarning)
+            self.array = np.asarray(array)
         self.rename(name, on_errors=on_errors)
         self._extended_data_units = b''
         self._extended_dimension_units = [b'', b'', b'', b'']
