@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 
 from igorwriter import IgorWave, validator, ENCODING
+from igorwriter.errors import TypeConversionWarning
 
 OUTDIR = Path(os.path.dirname(os.path.abspath(__file__))) / 'out'
 
@@ -70,8 +71,7 @@ class WaveTestCase(unittest.TestCase):
                 wave.save(fp)
 
     def test_array_type(self):
-        valid_types = (np.bool_, np.float16, np.int32, np.uint32, np.int64, np.uint64, np.float32, np.float64, np.complex128)
-        invalid_types = (object, str)
+        valid_types = (np.bool_, np.float16, np.int32, np.uint32, np.int64, np.uint64, np.float32, np.float64, np.complex128, np.object_, np.str_, np.bytes_)
         for vt in valid_types:
             with self.subTest('type: %r' % vt):
                 wave = IgorWave(np.random.randint(0, 100, 10).astype(vt))
@@ -79,13 +79,6 @@ class WaveTestCase(unittest.TestCase):
                     wave.save(fp)
                 with open(OUTDIR / 'array_type_{}.itx'.format(vt.__name__), 'w') as fp:
                     wave.save_itx(fp)
-        for it in invalid_types:
-            with self.subTest('type: %r' % it):
-                wave = IgorWave(np.random.randint(0, 100, 10).astype(it))
-                with TemporaryFile('wb') as fp:
-                    self.assertRaises(TypeError, wave.save, fp)
-                with TemporaryFile('wt') as fp:
-                    self.assertRaises(TypeError, wave.save_itx, fp)
 
     def test_dimscale(self):
         array = np.random.randint(0, 100, 10, dtype=np.int32)
@@ -137,7 +130,7 @@ class WaveTestCase(unittest.TestCase):
         array = np.random.randint(0, 100, 10, dtype=np.int32)
         wave = IgorWave(array)
         self.assertRaises(validator.InvalidNameError, wave.rename, name, on_errors='raise')
-        wave.rename(name, on_errors='fix')
+        self.assertWarns(validator.RenameWarning, wave.rename, name, on_errors='fix')
         self.assertEqual(wave.name, name.replace('\'', '_'))
 
 
@@ -216,6 +209,90 @@ class WaveTestCase(unittest.TestCase):
             w.set_dimlabel(0, -1, '')
             self.assertEqual(w._bin_header.dimLabelsSize[0], 0)
             self.assertFalse(w._dimension_labels[0])
+
+
+    def test_textwave(self):
+        a = np.array(['a', 'bb', 'ccc', 'dddd', 'eeeee', 'ffffff'])
+        w = IgorWave(a, 'mytextwave')
+        with open(OUTDIR / 'textwave.itx', 'w+t') as fp:
+            w.save_itx(fp)
+            fp.seek(0)
+            string = fp.read()
+            self.assertRegex(string, r'"a"')
+        with open(OUTDIR / 'textwave.ibw', 'wb') as fp:
+            w.save(fp)
+
+    def test_textwave_from_bytes(self):
+        a = np.array([b'a', b'bb', b'ccc', b'dddd', b'eeeee', b'ffffff'])
+        w = IgorWave(a, 'mytextwave')
+        with open(OUTDIR / 'textwave_from_bytes.itx', 'w+t') as fp:
+            w.save_itx(fp)
+            fp.seek(0)
+            string = fp.read()
+            self.assertRegex(string, r'"a"')
+        with open(OUTDIR / 'textwave_from_bytes.ibw', 'wb') as fp:
+            w.save(fp)
+
+    def test_textwave_multidim(self):
+        a = np.array([str(x)*np.random.randint(1, 10) for x in 'abcdefghijklmnop']).reshape((2, 2, 2, 2))
+        w = IgorWave(a, 'my4dtextwave')
+        with open(OUTDIR / 'textwave_multidim.itx', 'w+t') as fp:
+            w.save_itx(fp)
+        with open(OUTDIR / 'textwave_multidim.ibw', 'wb') as fp:
+            w.save(fp)
+
+    def test_textwave_special_chars(self):
+        a = np.array(['a\tb', 'a\rb', 'a\nb', 'a\r\nb', 'a\'b', 'a"b', 'a\\b'])
+        w = IgorWave(a, 'mytextwave')
+        with open(OUTDIR / 'textwave_spchars.itx', 'w+t') as fp:
+            w.save_itx(fp)
+            fp.seek(0)
+            string = fp.read()
+            self.assertTrue('\\t' in string)
+            self.assertTrue('\\r' in string)
+            self.assertTrue('\\n' in string)
+            self.assertTrue('\\\'' in string)
+            self.assertTrue('\\"' in string)
+            self.assertTrue('\\\\' in string)
+        with open(OUTDIR / 'textwave_spchars.ibw', 'wb') as fp:
+            w.save(fp)
+
+    def test_optional_data(self):
+        # wave with a lot of optional data
+        a = np.array([str(x)*np.random.randint(1, 10) for x in 'abcdefghijklmnop']).reshape((2, 2, 2, 2))
+        w = IgorWave(a, 'optDataTest')
+        w.set_dimscale('x', 0, 1, 'verylongdimunitX')
+        w.set_dimscale('y', 0, 1, 'verylongdimunitY')
+        w.set_dimscale('z', 0, 1, 'verylongdimunitZ')
+        w.set_dimscale('t', 0, 1, 'verylongdimunitT')
+        w.set_datascale('verylongunitData')
+        w.set_dimlabel(0, -1, 'dimensionlabel0')
+        w.set_dimlabel(1, -1, 'dimensionlabel1')
+        w.set_dimlabel(2, -1, 'dimensionlabel2')
+        w.set_dimlabel(3, -1, 'dimensionlabel3')
+        with open(OUTDIR / 'optional_data.ibw', 'wb') as fp:
+            w.save(fp)
+        with open(OUTDIR / 'optional_data.itx', 'w') as fp:
+            w.save_itx(fp)
+
+    def test_object_array(self):
+        # wave with a lot of optional data
+        with self.subTest('mixed type array'):
+            a = np.array(['a', 1.0, 0.5, b'spam'], dtype=object)
+            w = IgorWave(a, 'mixed_dtype')
+            with open(OUTDIR / 'object_array_mixed_dtype.itx', 'w+t') as fp:
+                self.assertWarns(TypeConversionWarning, w.save_itx, fp)
+                fp.seek(0)
+                text = fp.read()
+                self.assertTrue('WAVES /T' in text)
+        with self.subTest('numeric object array'):
+            a = np.array([0.1, 0.2, 0.3], dtype=object)
+            w = IgorWave(a, 'numeric_object')
+            with open(OUTDIR / 'object_array_numeric.itx', 'w+t') as fp:
+                self.assertWarns(TypeConversionWarning, w.save_itx, fp)
+                fp.seek(0)
+                text = fp.read()
+                self.assertTrue('WAVES /D' in text)
 
 
 if __name__ == '__main__':

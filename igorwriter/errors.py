@@ -1,0 +1,2 @@
+class TypeConversionWarning(UserWarning):
+    pass

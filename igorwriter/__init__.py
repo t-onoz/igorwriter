@@ -13,6 +13,7 @@ except ImportError:
 import warnings
 
 from igorwriter import validator
+from igorwriter.errors import TypeConversionWarning
 
 MAXDIMS = 4
 MAX_WAVE_NAME2 = 18  # Maximum length of wave name in version 1 and 2 files. Does not include the trailing null.
@@ -22,6 +23,8 @@ MAX_UNIT_CHARS = 3
 ENCODING = locale.getpreferredencoding()
 
 TYPES = {
+    np.bytes_: 0,
+    np.str_: 0,
     np.bool_: 8,
     np.int8: 8,
     np.int16: 0x10,
@@ -46,6 +49,8 @@ ITX_TYPES = {
     np.float64: '/D',
     np.complex64: '/C/S',
     np.complex128: '/C/D',
+    np.bytes_: '/T',
+    np.str_: '/T',
 }
 
 
@@ -244,7 +249,15 @@ class IgorWave5(object):
 
         self._wave_header.nDim = a.shape + (0,) * (MAXDIMS - a.ndim)
 
-        self._bin_header.wfmSize = 320 + a.nbytes
+        if TYPES[a.dtype.type] == 0:
+            # text wave
+            wavesize = len(b''.join(a.ravel(order='F')))
+            self._bin_header.sIndicesSize = 4 * a.size
+        else:
+            wavesize = a.nbytes
+            self._bin_header.sIndicesSize = 0
+
+        self._bin_header.wfmSize = 320 + wavesize
 
         # checksum
         first384bytes = (bytearray(self._bin_header) + bytearray(self._wave_header))[:384]
@@ -257,7 +270,10 @@ class IgorWave5(object):
         try:
             fp.write(self._bin_header)
             fp.write(self._wave_header)
-            fp.write(a.tobytes(order='F'))
+            if TYPES[a.dtype.type] == 0: # text waves
+                fp.write(b''.join(a.ravel(order='F')))
+            else:
+                fp.write(a.tobytes(order='F'))
 
             fp.write(self._extended_data_units)
             for u in self._extended_dimension_units:
@@ -269,6 +285,13 @@ class IgorWave5(object):
                         b += b'\x00' * (32-len(b))
                         assert len(b) == 32
                         fp.write(b)
+            if TYPES[a.dtype.type] == 0:  # text waves
+                sindices = np.zeros(a.size, dtype=np.int32)
+                pos = 0
+                for idx, s in enumerate(a.ravel(order='F')):
+                    pos += len(s)
+                    sindices[idx] = pos
+                fp.write(sindices.tobytes(order='F'))
         finally:
             if fp is not file:
                 fp.close()
@@ -294,6 +317,9 @@ class IgorWave5(object):
             if np.iscomplexobj(array):
                 def str_(x):
                     return '%s\t%s' % (x.real, x.imag)
+            elif ITX_TYPES[array.dtype.type] == '/T':
+                def str_(x):
+                    return '"' + self._escape_specials(x).decode(ENCODING) + '"'
             else:
                 str_ = str
             # write in column/row/layer/chunk order
@@ -351,6 +377,8 @@ class IgorWave5(object):
         if type_ is np.datetime64:
             self.set_datascale('dat')
             return (self.array - np.datetime64('1904-01-01 00:00:00')) / np.timedelta64(1, 's')
+        if type_ is np.str_:
+            return np.array([e.encode(ENCODING) for e in self.array.ravel()]).reshape(self.array.shape)
         for from_, to_ in {np.int64: np.int32, np.uint64: np.uint32}.items():
             if type_ is from_:
                 type_info = np.iinfo(to_)
@@ -358,7 +386,33 @@ class IgorWave5(object):
                     return self.array.astype(to_)
                 else:
                     raise TypeError('Cast from %r to %r failed.' % (type_, to_))
+        if type_ is np.object_:
+            # infer data type
+            candidates = [np.float64, np.bytes_, np.str_]
+            for t in candidates:
+                try:
+                    a = self.array.astype(t)
+                    msg = ("Data will be converted from np.object_ to numpy.{}. "
+                           "To avoid this warning, "
+                           "you may manually convert the data before calling IgorWave().").format(t.__name__)
+                    if t is np.str_:
+                        a = np.array([e.encode(ENCODING) for e in a.ravel()]).reshape(a.shape)
+                    warnings.warn(msg, category=TypeConversionWarning)
+                    return a
+                except Exception:
+                    pass
         return self.array
+
+    @staticmethod
+    def _escape_specials(b: bytes):
+        # escape special characters
+        b = b.replace(b'\\', b'\\\\')
+        b = b.replace(b'\t', b'\\t')
+        b = b.replace(b'\r', b'\\r')
+        b = b.replace(b'\n', b'\\n')
+        b = b.replace(b'\'', b'\\\'')
+        b = b.replace(b'"', b'\\"')
+        return b
 
     @staticmethod
     def load(self, file):
