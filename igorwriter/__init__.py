@@ -5,6 +5,9 @@ import locale
 import ctypes
 import struct
 import numpy as np
+
+import igorwriter.errors
+
 try:
     from pint.errors import UnitStrippedWarning
 except ImportError:
@@ -218,7 +221,7 @@ class IgorWave5(object):
         # but they can conflict with built-in names.
         for s in validator.NG_LETTERS:
             if s in label:
-                raise validator.InvalidNameError('label contains illegal characters (", \', :, ;, and control characters)')
+                raise igorwriter.errors.InvalidNameError('label contains illegal characters (", \', :, ;, and control characters)')
         blabel = label.encode(ENCODING)
         if len(blabel) > 31:
             raise ValueError('Dimension labels cannot be longer than 31 bytes.')

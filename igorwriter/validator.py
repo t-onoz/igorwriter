@@ -6,16 +6,9 @@ import re
 
 import igorwriter
 from igorwriter import builtin_names
+from igorwriter.errors import InvalidNameError, RenameWarning
 
 NG_LETTERS = ['"', '\'', ':', ';'] + [chr(i) for i in range(32)]
-
-
-class InvalidNameError(Exception):
-    pass
-
-
-class RenameWarning(UserWarning):
-    pass
 
 
 def _fix_or_raise(fn, on_errors='raise'):

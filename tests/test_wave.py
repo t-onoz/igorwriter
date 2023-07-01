@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
+import igorwriter.errors
 from igorwriter import IgorWave, validator, ENCODING
 from igorwriter.errors import TypeConversionWarning
 
@@ -129,8 +130,8 @@ class WaveTestCase(unittest.TestCase):
         name = '\'invalid_name\''  # wave cannot contain quotation marks
         array = np.random.randint(0, 100, 10, dtype=np.int32)
         wave = IgorWave(array)
-        self.assertRaises(validator.InvalidNameError, wave.rename, name, on_errors='raise')
-        self.assertWarns(validator.RenameWarning, wave.rename, name, on_errors='fix')
+        self.assertRaises(igorwriter.errors.InvalidNameError, wave.rename, name, on_errors='raise')
+        self.assertWarns(igorwriter.errors.RenameWarning, wave.rename, name, on_errors='fix')
         self.assertEqual(wave.name, name.replace('\'', '_'))
 
 
@@ -151,7 +152,7 @@ class WaveTestCase(unittest.TestCase):
         wavename = 'dimlabeltest'
         with self.subTest('invalid dimlabel'):
             w = IgorWave(a, wavename)
-            self.assertRaises(validator.InvalidNameError, w.set_dimlabel, 0, 0, "'")
+            self.assertRaises(igorwriter.errors.InvalidNameError, w.set_dimlabel, 0, 0, "'")
             w.set_dimlabel(0, 0, "a"*31)
             self.assertRaises(ValueError, w.set_dimlabel, 0, 0, "a"*32)
         with self.subTest('dimlabel for entire row'):

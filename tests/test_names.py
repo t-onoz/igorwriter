@@ -1,4 +1,7 @@
 import warnings
+
+import igorwriter.errors
+
 try:
     import unittest2 as unittest
 except ImportError:
@@ -11,14 +14,14 @@ from igorwriter import validator as v
 
 class NameTestCase(unittest.TestCase):
     def setUp(self):
-        warnings.simplefilter('ignore', category=v.RenameWarning)
+        warnings.simplefilter('ignore', category=igorwriter.errors.RenameWarning)
 
     def test_empty_name(self):
         # empty string is invalid regardless of the modes.
         name = ''
         for liberal, long in product((True, False), (True, False)):
             with self.subTest(name=name, liberal=liberal, long=long):
-                self.assertRaises(v.InvalidNameError, v.check_and_encode, name, liberal, long)
+                self.assertRaises(igorwriter.errors.InvalidNameError, v.check_and_encode, name, liberal, long)
                 bname = v.check_and_encode(name, liberal, long, on_errors='fix')
                 self.assertEqual(bname, b'wave0')  # empty name is fixed as 'wave0'
 
@@ -29,13 +32,13 @@ class NameTestCase(unittest.TestCase):
                 if long:
                     self.assertEqual(v.check_and_encode(name, liberal, long), name.encode(igorwriter.ENCODING))
                 else:
-                    self.assertRaises(v.InvalidNameError, v.check_and_encode, name, liberal, long)
+                    self.assertRaises(igorwriter.errors.InvalidNameError, v.check_and_encode, name, liberal, long)
                     bname = v.check_and_encode(name, liberal, long, on_errors='fix')
                     desired = b'x'*31
                     self.assertEqual(bname, desired)
             with self.subTest('256-bit length name', liberal=liberal, long=long):
                 name = 'x' * 256
-                self.assertRaises(v.InvalidNameError, v.check_and_encode, name, liberal, long)
+                self.assertRaises(igorwriter.errors.InvalidNameError, v.check_and_encode, name, liberal, long)
                 bname = v.check_and_encode(name, liberal, long, on_errors='fix')
                 desired = b'x'*255 if long else b'x'*31
                 self.assertEqual(bname, desired)
@@ -45,7 +48,7 @@ class NameTestCase(unittest.TestCase):
         for ng_letter, liberal, long in product(NG_LETTERS, (True, False), (True, False)):
             with self.subTest('with NG letter %r' % ng_letter, liberal=liberal, long=long):
                 name = 'wave_' + ng_letter
-                self.assertRaises(v.InvalidNameError, v.check_and_encode, name, liberal, long)
+                self.assertRaises(igorwriter.errors.InvalidNameError, v.check_and_encode, name, liberal, long)
                 bname = v.check_and_encode(name, liberal, long, on_errors='fix')
                 desired = b'wave__'
                 self.assertEqual(bname, desired)
@@ -59,7 +62,7 @@ class NameTestCase(unittest.TestCase):
                 bname = v.check_and_encode(name, liberal, long)
                 self.assertEqual(bname, name.encode(igorwriter.ENCODING))
             else:
-                self.assertRaises(v.InvalidNameError, v.check_and_encode, name, liberal, long)
+                self.assertRaises(igorwriter.errors.InvalidNameError, v.check_and_encode, name, liberal, long)
                 bname = v.check_and_encode(name, liberal, long, on_errors='fix')
                 desired = desired_l if long else desired_s
                 self.assertEqual(bname, desired)
@@ -72,7 +75,7 @@ class NameTestCase(unittest.TestCase):
             'k1', 'K1',  # variables
         )
         for name, liberal, long in product(names, (True, False), (True, False)):
-            self.assertRaises(v.InvalidNameError, v.check_and_encode, name, liberal, long)
+            self.assertRaises(igorwriter.errors.InvalidNameError, v.check_and_encode, name, liberal, long)
             bname = v.check_and_encode(name, liberal, long, on_errors='fix')
             desired = (name + '_').encode(igorwriter.ENCODING)
             self.assertEqual(bname, desired)
