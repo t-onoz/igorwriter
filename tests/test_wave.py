@@ -141,5 +141,19 @@ class WaveTestCase(unittest.TestCase):
         self.assertEqual(wave.name, name.replace('\'', '_'))
 
 
+    def test_multiwave_itx(self):
+        a = np.random.random(size=2*3*4*2)
+        w1 = IgorWave(a, 'w_1d')
+        w2 = IgorWave(a.reshape((2, -1)), 'w_2d')
+        w3 = IgorWave(a.reshape((2, 3, -1)), 'w_3d')
+        w4 = IgorWave(a.reshape((2, 3, 4, -1)), 'w_4d')
+        with open(OUTDIR / 'multiwave_itx.itx', 'w+t') as fp:
+            w1.save_itx(fp)
+            w2.save_itx(fp)
+            w3.save_itx(fp)
+            w4.save_itx(fp)
+
+
+
 if __name__ == '__main__':
     unittest.main()
