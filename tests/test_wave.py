@@ -153,6 +153,69 @@ class WaveTestCase(unittest.TestCase):
             w3.save_itx(fp)
             w4.save_itx(fp)
 
+    def test_dimlabel(self):
+        a = np.random.random(size=(2, 3, 4, 5))
+        wavename = 'dimlabeltest'
+        with self.subTest('invalid dimlabel'):
+            w = IgorWave(a, wavename)
+            self.assertRaises(validator.InvalidNameError, w.set_dimlabel, 0, 0, "'")
+            w.set_dimlabel(0, 0, "a"*31)
+            self.assertRaises(ValueError, w.set_dimlabel, 0, 0, "a"*32)
+        with self.subTest('dimlabel for entire row'):
+            label = 'rowname'
+            w = IgorWave(a, wavename)
+            w.set_dimlabel(0, -1, label)
+            com = "X SetDimLabel 0,-1,'%s','%s'" % (label, wavename)
+            with open(OUTDIR / 'dimlabel_row_entire.itx', 'w+t') as fp:
+                w.save_itx(fp)
+                fp.seek(0)
+                self.assertRegex(fp.read(), com)
+            with open(OUTDIR / 'dimlabel_row_entire.ibw', 'wb') as fp:
+                w.save(fp)
+        with self.subTest('dimlabel for row element'):
+            label = 'row0'
+            w = IgorWave(a, wavename)
+            w.set_dimlabel(0, 0, label)
+            com = "X SetDimLabel 0,0,'%s','%s'" % (label, wavename)
+            with open(OUTDIR / 'dimlabel_row_elm.itx', 'w+t') as fp:
+                w.save_itx(fp)
+                fp.seek(0)
+                self.assertRegex(fp.read(), com)
+            with open(OUTDIR / 'dimlabel_row_elm.ibw', 'wb') as fp:
+                w.save(fp)
+        with self.subTest('multiple dimlabels'):
+            labels = {-1: 'rowname', 0: 'row0', 1: 'row1'}
+            w = IgorWave(a, wavename)
+            for i, l in labels.items():
+                w.set_dimlabel(0, i, l)
+            coms = ["X SetDimLabel 0,%d,'%s','%s'" % (i, l, wavename) for i, l in labels.items()]
+            with open(OUTDIR / 'dimlabel_multi.itx', 'w+t') as fp:
+                w.save_itx(fp)
+                fp.seek(0)
+                string = fp.read()
+                for com in coms:
+                    self.assertRegex(string, com)
+            with open(OUTDIR / 'dimlabel_multi.ibw', 'wb') as fp:
+                w.save(fp)
+        with self.subTest('dimlabel for columns'):
+            label = 'colname'
+            w = IgorWave(a, wavename)
+            w.set_dimlabel(1, -1, label)
+            com = "X SetDimLabel 1,-1,'%s','%s'" % (label, wavename)
+            with open(OUTDIR / 'dimlabel_col_entire.itx', 'w+t') as fp:
+                w.save_itx(fp)
+                fp.seek(0)
+                self.assertRegex(fp.read(), com)
+            with open(OUTDIR / 'dimlabel_col_entire.ibw', 'wb') as fp:
+                w.save(fp)
+        with self.subTest('dimlabel deletion'):
+            w = IgorWave(a, wavename)
+            w.set_dimlabel(0, -1, 'test')
+            self.assertEqual(w._bin_header.dimLabelsSize[0], 32)
+            self.assertTrue(w._dimension_labels[0])
+            w.set_dimlabel(0, -1, '')
+            self.assertEqual(w._bin_header.dimLabelsSize[0], 0)
+            self.assertFalse(w._dimension_labels[0])
 
 
 if __name__ == '__main__':

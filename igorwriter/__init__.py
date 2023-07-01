@@ -132,6 +132,7 @@ class IgorWave5(object):
         self.rename(name, on_errors=on_errors)
         self._extended_data_units = b''
         self._extended_dimension_units = [b'', b'', b'', b'']
+        self._dimension_labels = [dict(), dict(), dict(), dict()]
         try:
             # set units for pint.quantity._Quantity
             self.set_datascale('{:~}'.format(array.units))
@@ -190,6 +191,39 @@ class IgorWave5(object):
             self._bin_header.dataEUnitsSize = len(bunits)
             self._extended_data_units = bunits
 
+    def set_dimlabel(self, dimNumber: int, dimIndex: int, label: str):
+        """Set dimension labels.
+
+        :param dimNumber: 0 (rows), 1 (columns), 2 (layers), or 3 (chunks)
+        :param dimIndex: if -1, sets the label for the entire dimension, if >= 0, sets the label for that element of the dimension.
+        :param label: label string (up to 31 characters)
+        """
+        if dimNumber not in [0, 1, 2, 3]:
+            raise ValueError('dimNumber must be 0, 1, 2, or 3.')
+
+        # Dimension labels cannot contain illegal characters (", ', :, ; and control characters),
+        # but they can conflict with built-in names.
+        for s in validator.NG_LETTERS:
+            if s in label:
+                raise validator.InvalidNameError('label contains illegal characters (", \', :, ;, and control characters)')
+        blabel = label.encode(ENCODING)
+        if len(blabel) > 31:
+            raise ValueError('Dimension labels cannot be longer than 31 bytes.')
+
+        if label == '':
+            # if label is empty, remove the label.
+            self._dimension_labels[dimNumber].pop(dimIndex, None)
+        else:
+            self._dimension_labels[dimNumber][dimIndex] = blabel
+
+        # calculate new dimLabelsSize
+        if self._dimension_labels[dimNumber]:
+            # Each dimension has max(dimIndex) + 2 (-1, 0, .. max(dimIndex)) labels, and each of them contains 32 bytes
+            dimLabelsSize = 32 * (max(self._dimension_labels[dimNumber]) + 2)
+        else:
+            dimLabelsSize = 0
+        self._bin_header.dimLabelsSize[dimNumber] = dimLabelsSize
+
     def save(self, file, image=False):
         """save data as igor binary wave (.ibw) format.
 
@@ -220,6 +254,13 @@ class IgorWave5(object):
             fp.write(self._extended_data_units)
             for u in self._extended_dimension_units:
                 fp.write(u)
+            for dimlabeldict in self._dimension_labels:
+                if dimlabeldict:
+                    for i in range(-1, max(dimlabeldict)+1):
+                        b = dimlabeldict.get(i, b'\x00')
+                        b += b'\x00' * (32-len(b))
+                        assert len(b) == 32
+                        fp.write(b)
         finally:
             if fp is not file:
                 fp.close()
@@ -271,6 +312,11 @@ class IgorWave5(object):
                     units=bunits.decode(ENCODING),
                     name=name
                 ))
+            for dimNumber, dimlabeldict in enumerate(self._dimension_labels):
+                for dimIndex, blabel in dimlabeldict.items():
+                    fp.write('X SetDimLabel {dimNumber},{dimIndex},\'{label}\',\'{name}\'\n'.format(
+                        dimNumber=dimNumber, dimIndex=dimIndex, label=blabel.decode(ENCODING), name=name
+                    ))
         finally:
             if fp is not file:
                 fp.close()
