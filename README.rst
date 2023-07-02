@@ -46,8 +46,8 @@ A two-dimensional array with dimension labels
 >>> a2 = np.random.random((10, 3))
 >>> wave = IgorWave(a2, name='wave2d')
 >>> # you may set optional dimension labels
->>> wave.set_dimlabel(0, -1, 'points') # entire label for rows
->>> wave.set_dimlabel(1, -1, 'values') # entire label for columns
+>>> wave.set_dimlabel(0, -1, 'points') # label for entire rows
+>>> wave.set_dimlabel(1, -1, 'values') # label for entire columns
 >>> wave.set_dimlabel(1, 0, 'ValueA')  # label for column 0
 >>> wave.set_dimlabel(1, 1, 'ValueB')  # label for column 1
 >>> wave.set_dimlabel(1, 2, 'ValueC')  # label for column 2
