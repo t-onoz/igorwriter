@@ -95,10 +95,10 @@ Changelog
 =========
 
 
-v0.4.0 (2023-07-02)
+v0.4.1 (2023-07-02)
 -------------------
-- Added support for np.str_, np.bytes_ arrays.
-- Automatic type conversion for np.object_ arrays.
+- Added support for np.str\_, np.bytes\_ arrays.
+- Automatic type conversion for np.object\_ arrays.
 - Added support for dimension scaling (:code:`IgorWave.set_simlabel`).
 
 
