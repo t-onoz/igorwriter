@@ -1,7 +1,15 @@
 IgorWriter
 ==========
 
-Write IGOR binary (.ibw) or text (.itx) files from numpy array
+Write Igor Binary Wave (.ibw) or Igor Text (.itx) files from numpy array
+
+Features
+--------
+- Compatible with multi-dimensional arrays (up to 4 dimensions)
+- Supported :code:`numpy` data types: uint, int, float, complex, bool, str, bytes, datetime64
+- Data units (:code:`IgorWave.set_datascale`)
+- Dimension scaling (:code:`IgorWave.set_dimscale`)
+- Dimension labels (:code:`IgorWave.set_dimlabel`)
 
 Installation
 ------------
@@ -11,18 +19,39 @@ Installation
 
 Usage
 -----
+
+Basic usage
+
 >>> import numpy as np
 >>> from igorwriter import IgorWave
 >>> array = np.array([1,2,3,4,5,6])
+>>> # make IgorWave objects
 >>> wave = IgorWave(array, name='mywave')
 >>> wave2 = IgorWave(array.astype(np.float32), name='mywave2')
->>> wave.set_datascale('DataUnit')
->>> wave.set_dimscale('x', 0, 0.01, 's')  # set x scale information
->>> wave.save('mywave.ibw')  # Igor Binary Wave files can only contain one wave per file
+>>> # save data
+>>> wave.save('mywave.ibw')
 >>> wave.save_itx('mywave.itx')
->>> with open('multi_waves.itx', 'w') as fp:  # Igor Text files can contain multiples waves per file
+>>> with open('multi_waves.itx', 'w') as fp:
+>>>     # Igor Text files can contain multiples waves per file
 >>>     wave.save_itx(fp)
 >>>     wave2.save_itx(fp)
+
+Data units, dimension scaling
+
+>>> wave.set_datascale('DataUnit')
+>>> wave.set_dimscale('x', 0, 0.01, 's')
+
+A two-dimensional array with dimension labels
+
+>>> a2 = np.random.random((10, 3))
+>>> wave = IgorWave(a2, name='wave2d')
+>>> # you may set optional dimension labels
+>>> wave.set_dimlabel(0, -1, 'points') # entire label for rows
+>>> wave.set_dimlabel(1, -1, 'values') # entire label for columns
+>>> wave.set_dimlabel(1, 0, 'ValueA')  # label for column 0
+>>> wave.set_dimlabel(1, 1, 'ValueB')  # label for column 1
+>>> wave.set_dimlabel(1, 2, 'ValueC')  # label for column 2
+>>> wave.save('my2dwave.ibw')
 
 Wave Names
 ----------
@@ -35,7 +64,7 @@ _this_is_illegal_
 >>> wave = IgorWave(array, name='\'this_is_illegal\'', on_errors='raise')  # raise errors
 Traceback (most recent call last):
 ...
-igorwriter.validator.InvalidNameError: name must not contain " ' : ; or any control characters.
+igorwriter.errors.InvalidNameError: name must not contain " ' : ; or any control characters.
 
 Exporting pandas.DataFrame
 --------------------------
@@ -64,6 +93,13 @@ If you use e.g.
 
 Changelog
 =========
+
+
+v0.4.0 (2023-07-02)
+-------------------
+- Added support for np.str_, np.bytes_ arrays.
+- Automatic type conversion for np.object_ arrays.
+- Added support for dimension scaling (:code:`IgorWave.set_simlabel`).
 
 
 v0.3.0 (2019-11-16)
