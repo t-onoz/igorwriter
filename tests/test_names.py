@@ -11,6 +11,7 @@ from itertools import product
 import igorwriter
 from igorwriter import validator as v
 
+encoding = "utf-8"
 
 class NameTestCase(unittest.TestCase):
     def setUp(self):
@@ -30,7 +31,7 @@ class NameTestCase(unittest.TestCase):
             with self.subTest('32-bit length name', liberal=liberal, long=long):
                 name = 'x' * 32
                 if long:
-                    self.assertEqual(v.check_and_encode(name, liberal, long), name.encode(igorwriter.ENCODING))
+                    self.assertEqual(v.check_and_encode(name, liberal, long), name.encode(encoding))
                 else:
                     self.assertRaises(igorwriter.errors.InvalidNameError, v.check_and_encode, name, liberal, long)
                     bname = v.check_and_encode(name, liberal, long, on_errors='fix')
@@ -60,7 +61,7 @@ class NameTestCase(unittest.TestCase):
         for (name, desired_s, desired_l), liberal, long in product(zip(names, desired_std_short, desired_std_long), (True, False), (True, False)):
             if liberal:
                 bname = v.check_and_encode(name, liberal, long)
-                self.assertEqual(bname, name.encode(igorwriter.ENCODING))
+                self.assertEqual(bname, name.encode(encoding))
             else:
                 self.assertRaises(igorwriter.errors.InvalidNameError, v.check_and_encode, name, liberal, long)
                 bname = v.check_and_encode(name, liberal, long, on_errors='fix')
@@ -77,7 +78,7 @@ class NameTestCase(unittest.TestCase):
         for name, liberal, long in product(names, (True, False), (True, False)):
             self.assertRaises(igorwriter.errors.InvalidNameError, v.check_and_encode, name, liberal, long)
             bname = v.check_and_encode(name, liberal, long, on_errors='fix')
-            desired = (name + '_').encode(igorwriter.ENCODING)
+            desired = (name + '_').encode(encoding)
             self.assertEqual(bname, desired)
 
 

@@ -3,6 +3,7 @@ from __future__ import print_function, unicode_literals
 from functools import wraps
 import warnings
 import re
+from locale import getpreferredencoding as _getpreferredencoding
 
 import igorwriter
 from igorwriter import builtin_names
@@ -24,12 +25,14 @@ def _fix_or_raise(fn, on_errors='raise'):
     return inner
 
 
-def _fix_length(name, max_bytes):
-    bname = name.encode(igorwriter.ENCODING)
+def _fix_length(name, max_bytes, encoding=None):
+    if encoding is None:
+        encoding = _getpreferredencoding()
+    bname = name.encode(encoding)
     if len(bname) == 0:
         name = 'wave0'
     if len(bname) > max_bytes:
-        while len(name.encode(igorwriter.ENCODING)) > max_bytes:
+        while len(name.encode(encoding)) > max_bytes:
             name = name[:-1]
     return name, 'Size of name must be between 1 and %d' % max_bytes
 
@@ -53,24 +56,27 @@ def _fix_conflicts(name):
     return name, 'name must not conflict with built-in operations, functions, etc.'
 
 
-def check_and_encode(name, liberal=True, long=False, on_errors='raise'):
+def check_and_encode(name, liberal=True, long=False, on_errors='raise', encoding=None):
     """
 
     :param name: name of an object
     :param liberal: whether Liberal Object Names are allowed or not
     :param long: whether Long Object Names (introduced in Igor 8.00) are allowed or not
-    :param on_errors: If 'raise', raises InvalidNameError when name is invalid. Otherwise tries to fix errors.
+    :param on_errors: If 'raise', raises InvalidNameError when name is invalid, otherwise tries to fix errors.
+    :param encoding: text encoding. If None, it is set with getpreferredencoding()
     :return:
     """
+    if encoding is None:
+        encoding = _getpreferredencoding()
     MAX_BYTES = 255 if long else 31
     name_before = name
     name_after = None
     while name_before != name_after:
         name_before = name
-        name = _fix_or_raise(_fix_length, on_errors=on_errors)(name_before, MAX_BYTES)
+        name = _fix_or_raise(_fix_length, on_errors=on_errors)(name_before, MAX_BYTES, encoding=encoding)
         name = _fix_or_raise(_fix_ng_letters, on_errors=on_errors)(name)
         if not liberal:
             name = _fix_or_raise(_fix_standard, on_errors=on_errors)(name)
         name = _fix_or_raise(_fix_conflicts, on_errors=on_errors)(name)
         name_after = name
-    return name.encode(igorwriter.ENCODING)
+    return name.encode(encoding)

@@ -1,17 +1,15 @@
 import unittest
 import os
-from tempfile import TemporaryFile
 from pathlib import Path
 
 import numpy as np
 
 import igorwriter.errors
 from igorwriter import IgorWave
-from igorwriter.igorwave import ENCODING
 from igorwriter.errors import TypeConversionWarning
 
 OUTDIR = Path(os.path.dirname(os.path.abspath(__file__))) / 'out'
-
+ENCODING = "utf-8"
 
 class WaveTestCase(unittest.TestCase):
     @classmethod
@@ -295,6 +293,19 @@ class WaveTestCase(unittest.TestCase):
                 fp.seek(0)
                 text = fp.read()
                 self.assertTrue('WAVES /D' in text)
+
+    def test_unicode_wave(self):
+        a = np.array(['Hello', '你好', 'こんにちは', '안녕하세요'], dtype=np.str_)
+        w = IgorWave(a, 'H你こ안', unicode=True)
+        w.save(OUTDIR / 'unicode_wave.ibw')
+        self.assertEqual(w._wave_header.waveNameEncoding, 1)
+        self.assertEqual(w._wave_header.waveUnitsEncoding, 1)
+        self.assertEqual(w._wave_header.waveNoteEncoding, 1)
+        self.assertEqual(w._wave_header.waveDimLabelEncoding, 1)
+        self.assertEqual(w._wave_header.textWaveContentEncoding, 1)
+        w.save_itx(OUTDIR / 'unicode_wave.itx')
+        with open(OUTDIR / 'unicode_wave.itx', encoding='utf-8') as f:
+            f.read()
 
 
 if __name__ == '__main__':

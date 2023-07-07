@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function, unicode_literals
 import os
-import locale
 import ctypes
 import struct
 import numpy as np
+from locale import getpreferredencoding as _getpreferredencoding
 
 import igorwriter.errors
 
@@ -22,12 +21,10 @@ MAXDIMS = 4
 MAX_WAVE_NAME2 = 18  # Maximum length of wave name in version 1 and 2 files. Does not include the trailing null.
 MAX_WAVE_NAME5 = 31  # Maximum length of wave name in version 5 files. Does not include the trailing null.
 MAX_UNIT_CHARS = 3
-
-ENCODING = locale.getpreferredencoding()
+ENCODING=None
 
 TYPES = {
     np.bytes_: 0,
-    np.str_: 0,
     np.bool_: 8,
     np.int8: 8,
     np.int16: 0x10,
@@ -53,7 +50,6 @@ ITX_TYPES = {
     np.complex64: '/C/S',
     np.complex128: '/C/D',
     np.bytes_: '/T',
-    np.str_: '/T',
 }
 
 
@@ -87,7 +83,10 @@ class WaveHeader5(ctypes.Structure):
         ('npnts', ctypes.c_int32),  # Total number of points (multiply dimensions up to first zero).
         ('type', ctypes.c_int16),  # See types (e.g. NT_FP64) above. Zero for text waves.
         ('dLock', ctypes.c_int16),  # Reserved. Write zero. Ignore on read.
-        ('whpad1', ctypes.c_char * 6),  # Reserved. Write zero. Ignore on read.
+        ('whpad1', ctypes.c_char * 3),  # Reserved. Write zero. Ignore on read.
+        ('waveNameEncoding', ctypes.c_byte),
+        ('waveUnitsEncoding', ctypes.c_byte),
+        ('waveNoteEncoding', ctypes.c_byte),
         ('whVersion', ctypes.c_int16),  # Write 1. Ignore on read.
         ('bname', ctypes.c_char * (MAX_WAVE_NAME5 + 1)),  # Name of wave plus trailing null.
         ('whpad2', ctypes.c_int32),  # Reserved. Write zero. Ignore on read.
@@ -114,7 +113,9 @@ class WaveHeader5(ctypes.Structure):
         ('waveNoteH', ctypes.c_byte * 4),  # Used in memory only. Write zero. Ignore on read.
 
         ('platform', ctypes.c_char),  # 0=unspecified, 1=Macintosh, '2=Windows', Added for Igor Pro 5.5.
-        ('spare', ctypes.c_char * 3),
+        ('spare', ctypes.c_char),
+        ('waveDimLabelEncoding', ctypes.c_byte),
+        ('textWaveContentEncoding', ctypes.c_byte),
 
         ('whUnused', ctypes.c_int32 * 13),  # Reserved. Write zero. Ignore on read.
 
@@ -133,19 +134,30 @@ class WaveHeader5(ctypes.Structure):
 
 
 class IgorWave5(object):
-    def __init__(self, array, name='wave0', on_errors='fix'):
+    def __init__(self, array, name='wave0', on_errors='fix', unicode=True):
         """
 
         :param array: array_like object
         :param name: wave name
         :param on_errors: behavior when invalid name is given. 'fix': fix errors. 'raise': raise exception.
+        :param unicode: enables unicode support (encoding texts with utf-8).
+            If you use Igor6 or older and want to use non-ascii characters, set it to False.
         """
         self._bin_header = BinHeader5()
         self._wave_header = WaveHeader5()
         with warnings.catch_warnings():
             warnings.simplefilter('ignore', category=UnitStrippedWarning)
             self.array = np.asarray(array)
-        self.rename(name, on_errors=on_errors)
+        if unicode:
+            self._wave_header.waveNameEncoding = 1
+            self._wave_header.waveUnitsEncoding = 1
+            self._wave_header.waveNoteEncoding = 1
+            self._wave_header.waveDimLabelEncoding = 1
+            self._wave_header.textWaveContentEncoding = 1
+            self._encoding = 'utf-8'
+        else:
+            self._encoding = _getpreferredencoding()
+        self.rename(name, on_errors)
         self._extended_data_units = b''
         self._extended_dimension_units = [b'', b'', b'', b'']
         self._dimension_labels = [dict(), dict(), dict(), dict()]
@@ -154,7 +166,7 @@ class IgorWave5(object):
             self.set_datascale('{:~}'.format(array.units))
         except (ValueError, AttributeError):
             pass
-    
+
     def rename(self, name, on_errors='fix'):
         """
 
@@ -162,12 +174,12 @@ class IgorWave5(object):
         :param on_errors: behavior when invalid name is given. 'fix': fix errors. 'raise': raise exception.
         :return:
         """
-        bname = validator.check_and_encode(name, on_errors=on_errors)
+        bname = validator.check_and_encode(name, on_errors=on_errors, encoding=self._encoding)
         self._wave_header.bname = bname
 
     @property
     def name(self):
-        return self._wave_header.bname.decode(ENCODING)
+        return self._wave_header.bname.decode(self._encoding)
 
     def set_dimscale(self, dim, start, delta, units=None):
         """Set scale information of each axis.
@@ -182,7 +194,9 @@ class IgorWave5(object):
         self._wave_header.sfB[dimint] = start
         self._wave_header.sfA[dimint] = delta
         if units is not None:
-            bunits = units.encode(ENCODING)
+            bunits = units.encode(self._encoding)
+            # if the units is short, they are written directly in the WaveHeader5 object.
+            # longer units are stored as dict, and encoded when saved.
             if len(bunits) <= MAX_UNIT_CHARS:
                 self._wave_header.dimUnits[dimint][:] = bunits + b'\x00' * (MAX_UNIT_CHARS + 1 - len(bunits))
                 self._bin_header.dimEUnitsSize[dimint] = 0
@@ -197,7 +211,9 @@ class IgorWave5(object):
 
         :param units: string representing units of the data.
         """
-        bunits = units.encode('ascii', errors='replace')
+        bunits = units.encode(self._encoding)
+        # if the units is short, they are written directly in the WaveHeader5 object.
+        # longer units are stored as python bytes object, and written when saved.
         if len(bunits) <= MAX_UNIT_CHARS:
             self._wave_header.dataUnits = bunits
             self._bin_header.dataEUnitsSize = 0
@@ -221,8 +237,10 @@ class IgorWave5(object):
         # but they can conflict with built-in names.
         for s in validator.NG_LETTERS:
             if s in label:
-                raise igorwriter.errors.InvalidNameError('label contains illegal characters (", \', :, ;, and control characters)')
-        blabel = label.encode(ENCODING)
+                raise igorwriter.errors.InvalidNameError(
+                    'thelabel contains illegal characters (", \', :, ;, and control characters)'
+                )
+        blabel = label.encode(self._encoding)
         if len(blabel) > 31:
             raise ValueError('Dimension labels cannot be longer than 31 bytes.')
 
@@ -271,6 +289,7 @@ class IgorWave5(object):
         if fp.tell() > 0:
             raise ValueError('You can only save() into an empty file.')
         try:
+            # the binary header and wave header
             fp.write(self._bin_header)
             fp.write(self._wave_header)
             if TYPES[a.dtype.type] == 0: # text waves
@@ -305,9 +324,9 @@ class IgorWave5(object):
         :param file: file name or text-file object.
         :param image: if True, rows and columns are transposed."""
         array = self._check_array(image=image)
-        name = self._wave_header.bname.decode()
+        name = self._wave_header.bname.decode(self._encoding)
 
-        fp = file if hasattr(file, 'write') else open(file, mode='w')
+        fp = file if hasattr(file, 'write') else open(file, encoding=self._encoding, mode='w')
         try:
             if fp.tell() == 0:
                 fp.write('IGOR\n')
@@ -320,9 +339,9 @@ class IgorWave5(object):
             if np.iscomplexobj(array):
                 def str_(x):
                     return '%s\t%s' % (x.real, x.imag)
-            elif ITX_TYPES[array.dtype.type] == '/T':
+            elif array.dtype.type is np.bytes_:
                 def str_(x):
-                    return '"' + self._escape_specials(x).decode(ENCODING) + '"'
+                    return '"' + self._escape_specials(x.decode(self._encoding)) + '"'
             else:
                 str_ = str
             # write in column/row/layer/chunk order
@@ -346,13 +365,13 @@ class IgorWave5(object):
                 bunits = dimUnits.replace(b'\x00', b'') or self._extended_dimension_units[idx]
                 fp.write('X SetScale /P {dim},{start},{delta},"{units}",\'{name}\'\n'.format(
                     dim=dim, start=self._wave_header.sfB[idx], delta=self._wave_header.sfA[idx],
-                    units=bunits.decode(ENCODING),
+                    units=bunits.decode(self._encoding),
                     name=name
                 ))
             for dimNumber, dimlabeldict in enumerate(self._dimension_labels):
                 for dimIndex, blabel in dimlabeldict.items():
                     fp.write('X SetDimLabel {dimNumber},{dimIndex},\'{label}\',\'{name}\'\n'.format(
-                        dimNumber=dimNumber, dimIndex=dimIndex, label=blabel.decode(ENCODING), name=name
+                        dimNumber=dimNumber, dimIndex=dimIndex, label=blabel.decode(self._encoding), name=name
                     ))
         finally:
             if fp is not file:
@@ -362,8 +381,6 @@ class IgorWave5(object):
         if not isinstance(self.array, np.ndarray):
             raise ValueError('Please set an array before save')
         a = self._cast_array()
-        if a.dtype.type not in TYPES:
-            raise TypeError('Unsupported dtype: %r' % a.dtype.type)
         if a.ndim > 4:
             raise ValueError('Dimension of more than 4 is not supported.')
 
@@ -375,47 +392,63 @@ class IgorWave5(object):
     def _cast_array(self):
         # check array dtype and try type casting if necessary
         type_ = self.array.dtype.type
-        if type_ is np.float16:
-            return self.array.astype(np.float32)
-        if type_ is np.datetime64:
+        if type_ is np.bytes_:
+            self._wave_header.textWaveContentEncoding = 255
+            a = self.array
+        elif type_ in (np.int64, np.uint64):
+            to_type = {np.int64: np.int32, np.uint64: np.uint32}[type_]
+            tinfo = np.iinfo(to_type)
+            if (tinfo.min <= np.min(self.array)) and (np.max(self.array) <= tinfo.max):
+                a = self.array.astype(to_type)
+            else:
+                raise OverflowError('overflow detected when converting an array with type %r' % type_)
+        elif type_ is np.float16:
+            a = self.array.astype(np.float32)
+        elif type_ is np.clongdouble:
+            a = self.array.astype(np.float64)
+        elif type_ is np.datetime64:
             self.set_datascale('dat')
-            return (self.array - np.datetime64('1904-01-01 00:00:00')) / np.timedelta64(1, 's')
-        if type_ is np.str_:
-            return np.array([e.encode(ENCODING) for e in self.array.ravel()]).reshape(self.array.shape)
-        for from_, to_ in {np.int64: np.int32, np.uint64: np.uint32}.items():
-            if type_ is from_:
-                type_info = np.iinfo(to_)
-                if np.all((self.array >= type_info.min) & (self.array <= type_info.max)):
-                    return self.array.astype(to_)
-                else:
-                    raise TypeError('Cast from %r to %r failed.' % (type_, to_))
-        if type_ is np.object_:
+            a = (self.array - np.datetime64('1904-01-01 00:00:00')) / np.timedelta64(1, 's')
+        elif type_ is np.str_:
+            a = np.char.encode(self.array, encoding=self._encoding)
+        elif type_ is np.object_:
             # infer data type
-            candidates = [np.float64, np.bytes_, np.str_]
+            candidates = [np.float64, np.str_, np.bytes_]
             for t in candidates:
                 try:
                     a = self.array.astype(t)
+                except (ValueError, UnicodeError):
+                    continue
+                else:
                     msg = ("Data will be converted from np.object_ to numpy.{}. "
                            "To avoid this warning, "
                            "you may manually convert the data before calling IgorWave().").format(t.__name__)
                     if t is np.str_:
-                        a = np.array([e.encode(ENCODING) for e in a.ravel()]).reshape(a.shape)
+                        a = np.char.encode(a, encoding=self._encoding)
+                    elif t is np.bytes_:
+                        # 255 means binary data
+                        self._wave_header.textWaveContentEncoding = 255
                     warnings.warn(msg, category=TypeConversionWarning)
-                    return a
-                except Exception:
-                    pass
-        return self.array
+                    break
+            else:
+                raise ValueError('The array could not be converted to Igor-compatible types.')
+        elif type_ not in TYPES:
+            raise TypeError('The array data type %r is not compatible with Igor.' % type_)
+        else:
+            a = self.array
+        assert a.dtype.type in TYPES
+        return a
 
     @staticmethod
-    def _escape_specials(b: bytes):
+    def _escape_specials(s: str):
         # escape special characters
-        b = b.replace(b'\\', b'\\\\')
-        b = b.replace(b'\t', b'\\t')
-        b = b.replace(b'\r', b'\\r')
-        b = b.replace(b'\n', b'\\n')
-        b = b.replace(b'\'', b'\\\'')
-        b = b.replace(b'"', b'\\"')
-        return b
+        s = s.replace('\\', '\\\\')
+        s = s.replace('\t', '\\t')
+        s = s.replace('\r', '\\r')
+        s = s.replace('\n', '\\n')
+        s = s.replace('\'', '\\\'')
+        s = s.replace('"', '\\"')
+        return s
 
     @staticmethod
     def load(self, file):
