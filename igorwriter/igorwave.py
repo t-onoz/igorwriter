@@ -131,6 +131,7 @@ class WaveHeader5(ctypes.Structure):
     def __init__(self):
         super(WaveHeader5, self).__init__()
         self.sfA = (1,) * MAXDIMS
+        self.whVersion = 1
 
 
 class IgorWave5(object):
