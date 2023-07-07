@@ -272,8 +272,8 @@ class IgorWave5(object):
         self._wave_header.nDim = a.shape + (0,) * (MAXDIMS - a.ndim)
 
         if TYPES[a.dtype.type] == 0:
-            # text wave
-            wavesize = len(b''.join(a.ravel(order='F')))
+            # text wave (should be stored as numpy.bytes_)
+            wavesize = np.sum([len(x) for x in a.ravel()], dtype=int)
             self._bin_header.sIndicesSize = 4 * a.size
         else:
             wavesize = a.nbytes
@@ -293,14 +293,19 @@ class IgorWave5(object):
             # the binary header and wave header
             fp.write(self._bin_header)
             fp.write(self._wave_header)
-            if TYPES[a.dtype.type] == 0: # text waves
+
+            # wave data
+            if TYPES[a.dtype.type] == 0:  # text waves
                 fp.write(b''.join(a.ravel(order='F')))
             else:
                 fp.write(a.tobytes(order='F'))
 
+            # extended data units, dimension units
             fp.write(self._extended_data_units)
             for u in self._extended_dimension_units:
                 fp.write(u)
+
+            # dimension labels
             for dimlabeldict in self._dimension_labels:
                 if dimlabeldict:
                     for i in range(-1, max(dimlabeldict)+1):
@@ -308,13 +313,15 @@ class IgorWave5(object):
                         b += b'\x00' * (32-len(b))
                         assert len(b) == 32
                         fp.write(b)
-            if TYPES[a.dtype.type] == 0:  # text waves
+
+            # string indices if this is a text wave.
+            if TYPES[a.dtype.type] == 0:
                 sindices = np.zeros(a.size, dtype=np.int32)
                 pos = 0
                 for idx, s in enumerate(a.ravel(order='F')):
                     pos += len(s)
                     sindices[idx] = pos
-                fp.write(sindices.tobytes(order='F'))
+                fp.write(sindices.tobytes())
         finally:
             if fp is not file:
                 fp.close()
