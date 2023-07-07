@@ -1,12 +1,5 @@
-try:
-    import unittest2 as unittest
-except ImportError:
-    import unittest
-try:
-    from tempfile import TemporaryFile, TemporaryDirectory
-except ImportError:
-    from tempfile import TemporaryFile
-    from backports.tempfile import TemporaryDirectory
+import unittest
+from tempfile import TemporaryFile, TemporaryDirectory
 
 import numpy as np
 

@@ -1,5 +1,3 @@
-from io import open
-
 import igorwriter
 from igorwriter import IgorWave
 

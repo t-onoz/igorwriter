@@ -11,6 +11,7 @@ from igorwriter.errors import TypeConversionWarning
 OUTDIR = Path(os.path.dirname(os.path.abspath(__file__))) / 'out'
 ENCODING = "utf-8"
 
+
 class WaveTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

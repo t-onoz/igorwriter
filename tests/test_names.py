@@ -2,10 +2,7 @@ import warnings
 
 import igorwriter.errors
 
-try:
-    import unittest2 as unittest
-except ImportError:
-    import unittest
+import unittest
 from itertools import product
 
 import igorwriter

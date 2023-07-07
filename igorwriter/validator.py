@@ -1,11 +1,8 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function, unicode_literals
 from functools import wraps
 import warnings
 import re
 from locale import getpreferredencoding as _getpreferredencoding
 
-import igorwriter
 from igorwriter import builtin_names
 from igorwriter.errors import InvalidNameError, RenameWarning
 
