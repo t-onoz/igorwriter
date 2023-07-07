@@ -80,6 +80,15 @@ class WaveTestCase(unittest.TestCase):
                 with open(OUTDIR / 'array_type_{}.itx'.format(vt.__name__), 'w') as fp:
                     wave.save_itx(fp)
 
+    def test_int_overflow(self):
+        # int64 and uint64 overflow
+        a = np.array([2**63 - 1], dtype=np.int64)
+        self.assertRaises(OverflowError, IgorWave(a).save, OUTDIR/'int64_overflow.ibw')
+        a = np.array([-2**63 + 1], dtype=np.int64)
+        self.assertRaises(OverflowError, IgorWave(a).save, OUTDIR/'int64_overflow.ibw')
+        a = np.array([2**64 - 1], dtype=np.uint64)
+        self.assertRaises(OverflowError, IgorWave(a).save, OUTDIR/'uint64_overflow.ibw')
+
     def test_dimscale(self):
         array = np.random.randint(0, 100, 10, dtype=np.int32)
         wave = IgorWave(array)
