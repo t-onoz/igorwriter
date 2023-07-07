@@ -1,26 +1,30 @@
 import os
 import ctypes
 import struct
-import numpy as np
+import warnings
 from locale import getpreferredencoding as _getpreferredencoding
 
-import igorwriter.errors
-
+import numpy as np
 try:
-    from pint.errors import UnitStrippedWarning
+    from pandas import Series
 except ImportError:
-    class UnitStrippedWarning(UserWarning):
+    class Series:
         pass
-import warnings
+try:
+    from pint import Quantity
+except ImportError:
+    class Quantity:
+        pass
 
+import igorwriter.errors
 from igorwriter import validator
-from igorwriter.errors import TypeConversionWarning
+from igorwriter.errors import TypeConversionWarning, StrippedSeriesIndexWarning, InvalidNameError
 
 MAXDIMS = 4
 MAX_WAVE_NAME2 = 18  # Maximum length of wave name in version 1 and 2 files. Does not include the trailing null.
 MAX_WAVE_NAME5 = 31  # Maximum length of wave name in version 5 files. Does not include the trailing null.
 MAX_UNIT_CHARS = 3
-ENCODING=None
+ENCODING = None
 
 TYPES = {
     np.bytes_: 0,
@@ -145,9 +149,6 @@ class IgorWave5(object):
         """
         self._bin_header = BinHeader5()
         self._wave_header = WaveHeader5()
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore', category=UnitStrippedWarning)
-            self.array = np.asarray(array)
         if unicode:
             self._wave_header.waveNameEncoding = 1
             self._wave_header.waveUnitsEncoding = 1
@@ -161,11 +162,13 @@ class IgorWave5(object):
         self._extended_data_units = b''
         self._extended_dimension_units = [b'', b'', b'', b'']
         self._dimension_labels = [dict(), dict(), dict(), dict()]
-        try:
-            # set units for pint.quantity._Quantity
-            self.set_datascale('{:~}'.format(array.units))
-        except (ValueError, AttributeError):
-            pass
+
+        if isinstance(array, Series):
+            self.array = self._parse_Series(array)
+        elif isinstance(array, Quantity):
+            self.array = self._parse_Pint(array)
+        else:
+            self.array = np.asarray(array)
 
     def rename(self, name, on_errors='fix'):
         """
@@ -445,6 +448,46 @@ class IgorWave5(object):
             a = self.array
         assert a.dtype.type in TYPES
         return a
+
+    def _parse_Series(self, s):
+        import pandas as pd
+        start, step = None, None
+        # parse pandas.Series objects
+        if isinstance(s.index, pd.MultiIndex):
+            msg = 'pandas MultiIndex is stripped because it is not compatible with Igor waves.'
+            warnings.warn(msg, StrippedSeriesIndexWarning)
+        elif isinstance(s.index, pd.RangeIndex):
+            start, step = s.index.start, s.index.step
+        else:
+            i = s.index.to_numpy()
+            if issubclass(i.dtype.type, np.number):
+                diff = np.diff(i)
+                if np.all(np.isclose(diff, diff[0], atol=0)):
+                    start, step = i[0], diff[0]
+                else:
+                    msg = 'pandas Index is stripped because it is not evenly spaced.'
+                    warnings.warn(msg, StrippedSeriesIndexWarning)
+            else:
+                msg = 'pandas Index is stripped because non-numeric scaling is not supported in Igor'
+                warnings.warn(msg, StrippedSeriesIndexWarning)
+        if start is not None:
+            self.set_dimscale('x', start, step)
+            if s.index.name:
+                try:
+                    self.set_dimlabel(0, -1, s.index.name)
+                except (InvalidNameError, ValueError):
+                    msg = 'index name is ignored because "{}" is not a valid dimension label.'.format(
+                        s.index.name)
+                    warnings.warn(msg)
+        if issubclass(s.dtype.type, Quantity):
+            self.set_datascale('{:~}'.format(s.pint.units))
+            s = s.pint.magnitude
+        return s.to_numpy()
+
+    def _parse_Pint(self, q):
+        # set units for pint.quantity._Quantity
+        self.set_datascale('{:~}'.format(q.units))
+        return q.magnitude
 
     @staticmethod
     def _escape_specials(s: str):

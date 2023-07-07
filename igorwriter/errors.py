@@ -8,3 +8,7 @@ class InvalidNameError(Exception):
 
 class RenameWarning(UserWarning):
     pass
+
+
+class StrippedSeriesIndexWarning(UserWarning):
+    pass

@@ -6,7 +6,7 @@ import numpy as np
 
 import igorwriter.errors
 from igorwriter import IgorWave
-from igorwriter.errors import TypeConversionWarning
+from igorwriter.errors import TypeConversionWarning, StrippedSeriesIndexWarning
 
 OUTDIR = Path(os.path.dirname(os.path.abspath(__file__))) / 'out'
 ENCODING = "utf-8"
@@ -316,6 +316,60 @@ class WaveTestCase(unittest.TestCase):
         w.save_itx(OUTDIR / 'unicode_wave.itx')
         with open(OUTDIR / 'unicode_wave.itx', encoding='utf-8') as f:
             f.read()
+
+    def test_pandas_series(self):
+        import pandas as pd
+        with self.subTest('simple Series object'):
+            s = pd.Series([1, 2, 3, 4, 5, 6])
+            w = IgorWave(s, 'serieswave')
+        with self.subTest('Series object with uniform Index'):
+            s = pd.Series([1, 2, 3, 4, 5, 6])
+            s.index = np.linspace(1, 2, 6)
+            w = IgorWave(s, 'series_uniformind')
+            self.assertAlmostEqual(w._wave_header.sfA[0], 0.2)
+            self.assertAlmostEqual(w._wave_header.sfB[0], 1.0)
+        with self.subTest('Series object with invalid Index names'):
+            s = pd.Series([1, 2, 3, 4, 5, 6])
+            s.index = np.linspace(1, 2, 6)
+            for n in ('\'', 'a'*32):
+                s.index.name = n
+                with self.assertWarns(UserWarning):
+                    w = IgorWave(s)
+                self.assertAlmostEqual(w._wave_header.sfA[0], 0.2)
+                self.assertAlmostEqual(w._wave_header.sfB[0], 1.0)
+                self.assertNotIn(-1, w._dimension_labels[0])
+        with self.subTest('Series object with uniform Index with a name'):
+            s.index.name = 'myindex'
+            w = IgorWave(s, 'series_uniformind')
+            self.assertEqual(w._dimension_labels[0][-1], b'myindex')
+        with self.subTest('Series object with nonuniform Index'):
+            s = pd.Series([1, 2, 3])
+            s.index = [1, 2, 3.05]
+            s.index.name = 'myindex'
+            with self.assertWarns(StrippedSeriesIndexWarning):
+                w = IgorWave(s, 'series_nonuniformind')
+            # when index is invalid, dimension labels should be empty
+            self.assertAlmostEqual(w._wave_header.sfA[0], 1)
+            self.assertAlmostEqual(w._wave_header.sfB[0], 0)
+            self.assertNotIn(-1, w._dimension_labels[0])
+        with self.subTest('Series object with incompatible dtype Index'):
+            s = pd.Series([1, 2, 3])
+            s.index = [1, 2, 'spam']
+            s.index.name = 'myindex'
+            with self.assertWarns(StrippedSeriesIndexWarning):
+                w = IgorWave(s, 'series_invalidind')
+            # when index is invalid, dimension labels should be empty
+            self.assertAlmostEqual(w._wave_header.sfA[0], 1)
+            self.assertAlmostEqual(w._wave_header.sfB[0], 0)
+            self.assertNotIn(-1, w._dimension_labels[0])
+        with self.subTest('pint-pandas extended types'):
+            import pint_pandas
+            u = "kg m / s**2"
+            s = pd.Series([1.0, 2.0, 2.0, 3.0], dtype=f"pint[{u}]")
+            expected = '{:~}'.format(s.pint.units).encode(ENCODING)
+            wave = IgorWave(s)
+            bunits = wave._extended_data_units
+            self.assertEqual(bunits, expected)
 
 
 if __name__ == '__main__':
