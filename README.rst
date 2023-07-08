@@ -5,11 +5,11 @@ Write Igor Binary Wave (.ibw) or Igor Text (.itx) files from numpy array
 
 Features
 --------
-- Compatible with multi-dimensional arrays (up to 4 dimensions)
-- Supported :code:`numpy` data types: uint, int, float, complex, bool, str, bytes, datetime64
-- Data units (:code:`IgorWave.set_datascale`)
-- Dimension scaling (:code:`IgorWave.set_dimscale`)
-- Dimension labels (:code:`IgorWave.set_dimlabel`)
+* Compatible with multi-dimensional arrays (up to 4 dimensions)
+* Supported :code:`numpy` data types: uint, int, float, complex, bool, str, bytes, datetime64
+* Data units (:code:`IgorWave.set_datascale`)
+* Dimension scaling (:code:`IgorWave.set_dimscale`)
+* Dimension labels (:code:`IgorWave.set_dimlabel`)
 
 Installation
 ------------
@@ -53,28 +53,54 @@ A two-dimensional array with dimension labels
 >>> wave.set_dimlabel(1, 2, 'ValueC')  # label for column 2
 >>> wave.save('my2dwave.ibw')
 
+Unicode support
+---------------
+From igorwriter 0.5.0, IgorWave stores texts with utf-8 encoding.
+If you use Igor Pro 6 or older and want to use non-ascii characters, set :code:`unicode=False` when calling :code:`IgorWave()`.
+It will fall back to system text encoding (Windows-1252, Shift JIS, etc.).
+
 Wave Names
 ----------
 There are restrictions on object names in IGOR. From v0.2.0, this package deals with illegal object names.
 
->>> wave = IgorWave(array, name='\'this_is_illegal\'', on_errors='fix')  # fix illegal names automatically
-RenameWarning: name "'this_is_illegal'" is fixed as '_this_is_illegal_' (reason: name must not contain " ' : ; or any control characters.)
->>> print(wave.name)
-_this_is_illegal_
->>> wave = IgorWave(array, name='\'this_is_illegal\'', on_errors='raise')  # raise errors
+>>> wave = IgorWave(array, name='wave:0', on_errors='fix')  # fix illegal names automatically
+RenameWarning: name 'wave:0' is fixed as 'wave_0' (reason: name must not contain " ' : ; or any control characters.)
+>>> wave.name
+'wave_0'
+>>> wave = IgorWave(array, name='wave:0', on_errors='raise')  # raise errors
 Traceback (most recent call last):
 ...
-igorwriter.errors.InvalidNameError: name must not contain " ' : ; or any control characters.
+InvalidNameError: name must not contain " ' : ; or any control characters.
 
-Exporting pandas.DataFrame
---------------------------
-Convenience functions for saving DataFrame in a Igor Text file or a series of Igor Binary Wave files are provided.
+
+Pint integration
+----------------
+If `Pint <https://github.com/hgrecco/pint>`_ Quantity objects are passed to IgorWave, data units will be set automatically.
+
+>>> import pint
+>>> ureg = pint.UnitRegistry()
+>>> w = IgorWave([3, 4] * ureg.meter / ureg.second, name='wave_with_units')
+>>> w.save_itx('wave_with_units.itx')
+...
+X SetScale d,0,0,"m / s",'wave_with_units'
+X SetScale /P x,0.0,1.0,"",'wave_with_units'
+
+
+
+Pandas integration
+------------------
+You can easily export DataFrame objects with convenience functions.
 
 >>> from igorwriter import utils
 >>> utils.dataframe_to_itx(df, 'df.itx')   # all Series are exported in one file
 >>> waves = utils.dataframe_to_ibw(df, prefix='df_bin')   # each Series is saved in a separate file, <prefix>_<column>.ibw
 >>> waves  # dictionary of generated IgorWaves. You can change wave names, set data units, set dimension scaling, etc.
 {'col1': <IgorWave 'col1' at 0x...>, 'col2': ...}
+
+IgorWriter tries to convert index info on pandas.Series objects.
+
+* If the index is evenly-spaced, wave dimension scaling is set accordingly.
+* Index names are interpreted as the dimension labels.
 
 Notes on Image Plots
 --------------------
@@ -83,7 +109,7 @@ Image Plot in IGOR and :code:`imshow` in matplotlib use different convention for
 - Rows as x, columns as y (IGOR)
 - Columns as x, rows as y (Matplotlib)
 
-Thus, :code:`image` parameter was introduced in :code:`save()` and :code:`save_itx()` methods. 
+Thus, :code:`image` parameter was introduced in :code:`save()` and :code:`save_itx()` methods.
 If you use e.g. 
 
 >>> wave.save('path.ibw', image=True)
@@ -93,6 +119,14 @@ If you use e.g.
 
 Changelog
 =========
+
+
+v0.5.0 (2023-07-08)
+-------------------
+- UTF-8 as default encoding. You can instead use system text encoding by setting :code:`unicode=False` to IgorWave().
+- Automatic conversion from pandas index to dimension scaling.
+- Exporting 64-bit integer waves (requires Igor Pro 7 or later).
+- BUG FIX: Igor Text files created from np.bool\_ arrays were broken.
 
 
 v0.4.1 (2023-07-02)
