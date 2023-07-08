@@ -81,6 +81,14 @@ class WaveTestCase(unittest.TestCase):
                 with open(OUTDIR / 'array_type_{}.itx'.format(vt.__name__), 'w') as fp:
                     wave.save_itx(fp)
 
+    def test_bool_to_itx(self):
+        a = np.array([True, True, True, True, True], dtype=np.bool_)
+        w = IgorWave(a, 'boolwave')
+        with open(OUTDIR / 'bool_to_itx.itx', 'w+t') as fp:
+            w.save_itx(fp)
+            fp.seek(0)
+            self.assertRegex(fp.read(), r'BEGIN\n1')
+
     def test_int_overflow(self):
         # int64 and uint64 overflow
         a = np.array([2**63 - 1], dtype=np.int64)

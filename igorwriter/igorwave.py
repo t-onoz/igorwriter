@@ -28,7 +28,6 @@ ENCODING = None
 
 TYPES = {
     np.bytes_: 0,
-    np.bool_: 8,
     np.int8: 8,
     np.int16: 0x10,
     np.int32: 0x20,
@@ -41,7 +40,6 @@ TYPES = {
     np.complex128: 4 + 1,
 }
 ITX_TYPES = {
-    np.bool_: '/B',
     np.int8: '/B',
     np.int16: '/W',
     np.int32: '/I',
@@ -412,6 +410,8 @@ class IgorWave5(object):
                 a = self.array.astype(to_type)
             else:
                 raise OverflowError('overflow detected when converting an array with type %r' % type_)
+        elif type_ is np.bool_:
+            a = self.array.astype(np.int8)
         elif type_ is np.float16:
             a = self.array.astype(np.float32)
         elif type_ is np.clongdouble:
@@ -442,10 +442,10 @@ class IgorWave5(object):
                     break
             else:
                 raise ValueError('The array could not be converted to Igor-compatible types.')
-        elif type_ not in TYPES:
-            raise TypeError('The array data type %r is not compatible with Igor.' % type_)
-        else:
+        elif type_ in TYPES:
             a = self.array
+        else:
+            raise TypeError('The array data type %r is not compatible with Igor.' % type_)
         assert a.dtype.type in TYPES
         return a
 
