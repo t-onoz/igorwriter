@@ -31,9 +31,11 @@ TYPES = {
     np.int8: 8,
     np.int16: 0x10,
     np.int32: 0x20,
+    np.int64: 0x80,  # requires Igor Pro 7 or later
     np.uint8: 8 + 0x40,
     np.uint16: 0x10 + 0x40,
     np.uint32: 0x20 + 0x40,
+    np.uint64: 0x80 + 0x40,  # requires Igor Pro 7 or later
     np.float32: 2,
     np.float64: 4,
     np.complex64: 2 + 1,
@@ -43,9 +45,11 @@ ITX_TYPES = {
     np.int8: '/B',
     np.int16: '/W',
     np.int32: '/I',
+    np.int64: '/L',  # requires Igor Pro 7 or later
     np.uint8: '/U/B',
     np.uint16: '/U/W',
     np.uint32: '/U/I',
+    np.uint64: '/U/L',   # requires Igor Pro 7 or later
     np.float32: '/S',
     np.float64: '/D',
     np.complex64: '/C/S',
@@ -136,14 +140,16 @@ class WaveHeader5(ctypes.Structure):
 
 
 class IgorWave5(object):
-    def __init__(self, array, name='wave0', on_errors='fix', unicode=True):
+    def __init__(self, array, name='wave0', on_errors='fix', unicode=True, int64_support=False):
         """
 
         :param array: array_like object
         :param name: wave name
         :param on_errors: behavior when invalid name is given. 'fix': fix errors. 'raise': raise exception.
         :param unicode: enables unicode support (encoding texts with utf-8).
-            If you use Igor6 or older and want to use non-ascii characters, set it to False.
+            If you use Igor Pro 6 or older and want to use non-ascii characters, set it to False.
+        :param int64_support: enables 64-bit integer support (requires Igor Pro 7 or later).
+            Note: If enabled, it will break backward compatibility for Igor Pro 6 or earlier.
         """
         self._bin_header = BinHeader5()
         self._wave_header = WaveHeader5()
@@ -156,6 +162,7 @@ class IgorWave5(object):
             self._encoding = 'utf-8'
         else:
             self._encoding = _getpreferredencoding()
+        self._int64_support = int64_support
         self.rename(name, on_errors)
         self._extended_data_units = b''
         self._extended_dimension_units = [b'', b'', b'', b'']
@@ -401,15 +408,19 @@ class IgorWave5(object):
         # check array dtype and try type casting if necessary
         type_ = self.array.dtype.type
         if type_ is np.bytes_:
+            # 255 means binary data
             self._wave_header.textWaveContentEncoding = 255
             a = self.array
-        elif type_ in (np.int64, np.uint64):
+        elif (not self._int64_support) and type_ in (np.int64, np.uint64):
+            # Convert to 32-bit integers
             to_type = {np.int64: np.int32, np.uint64: np.uint32}[type_]
             tinfo = np.iinfo(to_type)
             if (tinfo.min <= np.min(self.array)) and (np.max(self.array) <= tinfo.max):
                 a = self.array.astype(to_type)
             else:
-                raise OverflowError('overflow detected when converting an array with type %r' % type_)
+                msg = (f'Overflow detected when converting an array with type {type_!r}. '
+                    'If you are using Igor Pro 7 or later, try setting int64_support=True when calling IgorWave().')
+                raise OverflowError(msg)
         elif type_ is np.bool_:
             a = self.array.astype(np.int8)
         elif type_ is np.float16:

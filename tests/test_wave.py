@@ -72,7 +72,7 @@ class WaveTestCase(unittest.TestCase):
                 wave.save(fp)
 
     def test_array_type(self):
-        valid_types = (np.bool_, np.float16, np.int32, np.uint32, np.int64, np.uint64, np.float32, np.float64, np.complex128, np.object_, np.str_, np.bytes_)
+        valid_types = (np.bool_, np.float16, np.int32, np.uint32, np.int64, np.uint64, np.float32, np.float64, np.complex128, np.object_, np.str_, np.bytes_, int, float)
         for vt in valid_types:
             with self.subTest('type: %r' % vt):
                 wave = IgorWave(np.random.randint(0, 100, 10).astype(vt))
@@ -89,14 +89,32 @@ class WaveTestCase(unittest.TestCase):
             fp.seek(0)
             self.assertRegex(fp.read(), r'BEGIN\n1')
 
-    def test_int_overflow(self):
+    def test_int64(self):
         # int64 and uint64 overflow
-        a = np.array([2**63 - 1], dtype=np.int64)
+        a = np.array([2**63 - 1]*10, dtype=np.int64)
+        an = -a
+        au = np.array([2**63 - 1]*10, dtype=np.uint64)
         self.assertRaises(OverflowError, IgorWave(a).save, OUTDIR/'int64_overflow.ibw')
-        a = np.array([-2**63 + 1], dtype=np.int64)
-        self.assertRaises(OverflowError, IgorWave(a).save, OUTDIR/'int64_overflow.ibw')
-        a = np.array([2**64 - 1], dtype=np.uint64)
-        self.assertRaises(OverflowError, IgorWave(a).save, OUTDIR/'uint64_overflow.ibw')
+        self.assertRaises(OverflowError, IgorWave(an).save, OUTDIR/'int64_overflow.ibw')
+        self.assertRaises(OverflowError, IgorWave(au).save, OUTDIR/'int64_unsigned_overflow.ibw')
+        w = IgorWave(a, int64_support=True)
+        w.save(OUTDIR/'int64.ibw')
+        self.assertEqual(w._wave_header.type, 0x80)
+        com = 'WAVES /L'
+        with open(OUTDIR / 'int64.itx', 'w+t', encoding='utf-8') as fp:
+            w.save_itx(fp)
+            fp.seek(0)
+            content = fp.read()
+            self.assertRegex(content, com)
+        w = IgorWave(au, int64_support=True)
+        w.save(OUTDIR/'int64_unsigned.ibw')
+        self.assertEqual(w._wave_header.type, 0x80+0x40)
+        com = 'WAVES /U/L'
+        with open(OUTDIR / 'int64_unsigned.itx', 'w+t', encoding='utf-8') as fp:
+            w.save_itx(fp)
+            fp.seek(0)
+            content = fp.read()
+            self.assertRegex(content, com)
 
     def test_dimscale(self):
         array = np.random.randint(0, 100, 10, dtype=np.int32)
@@ -150,7 +168,6 @@ class WaveTestCase(unittest.TestCase):
         self.assertRaises(igorwriter.errors.InvalidNameError, wave.rename, name, on_errors='raise')
         self.assertWarns(igorwriter.errors.RenameWarning, wave.rename, name, on_errors='fix')
         self.assertEqual(wave.name, name.replace('\'', '_'))
-
 
     def test_multiwave_itx(self):
         a = np.random.random(size=2*3*4*2)
