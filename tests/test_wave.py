@@ -7,6 +7,7 @@ import numpy as np
 import igorwriter.errors
 from igorwriter import IgorWave
 from igorwriter.errors import TypeConversionWarning, StrippedSeriesIndexWarning
+from igorwriter.igorwave import  TYPES, ITX_TYPES
 
 OUTDIR = Path(os.path.dirname(os.path.abspath(__file__))) / 'out'
 ENCODING = "utf-8"
@@ -72,14 +73,22 @@ class WaveTestCase(unittest.TestCase):
                 wave.save(fp)
 
     def test_array_type(self):
+        array = np.random.randint(0, 100, 10)
         valid_types = (np.bool_, np.float16, np.int32, np.uint32, np.int64, np.uint64, np.float32, np.float64, np.complex128, np.object_, np.str_, np.bytes_, int, float)
-        for vt in valid_types:
+        expected_np_types = (np.int8, np.float32, np.int32, np.uint32, np.int32, np.uint32, np.float32, np.float64, np.complex128, np.float64, np.bytes_, np.bytes_, np.int32, np.float64)
+        for (vt, ent) in zip(valid_types, expected_np_types):
             with self.subTest('type: %r' % vt):
-                wave = IgorWave(np.random.randint(0, 100, 10).astype(vt))
+                wave = IgorWave(array.astype(vt), int64_support=False)
+                com = f'IGOR\nWAVES {ITX_TYPES[ent]} /N'
                 with open(OUTDIR / 'array_type_{}.ibw'.format(vt.__name__), 'wb') as fp:
                     wave.save(fp)
-                with open(OUTDIR / 'array_type_{}.itx'.format(vt.__name__), 'w') as fp:
+                    self.assertIs(wave._array_saved.dtype.type, ent)
+                    self.assertEqual(wave._wave_header.type, TYPES[ent])
+                with open(OUTDIR / 'array_type_{}.itx'.format(vt.__name__), 'w+t') as fp:
                     wave.save_itx(fp)
+                    fp.seek(0)
+                    content = fp.read()
+                    self.assertIn(com, content)
 
     def test_bool_to_itx(self):
         a = np.array([True, True, True, True, True], dtype=np.bool_)

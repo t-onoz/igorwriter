@@ -293,6 +293,7 @@ class IgorWave5(object):
         :param file: file name or binary-file object.
         :param image: if True, rows and columns are transposed."""
         a = self._check_array(image=image)
+        self._array_saved = a
 
         self._wave_header.npnts = len(a.ravel())
         self._wave_header.type = TYPES[a.dtype.type]
@@ -367,25 +368,17 @@ class IgorWave5(object):
         :param image: if True, rows and columns are transposed."""
         array = self._check_array(image=image)
         name = self._wave_header.bname.decode(self._encoding)
+        itx_type = ITX_TYPES[array.dtype.type]
+        shape = ','.join(str(x) for x in array.shape)
+        str_ = self._get_str_converter(array)
 
         fp = file if hasattr(file, 'write') else open(file, encoding=self._encoding, mode='w')
         try:
             if fp.tell() == 0:
                 fp.write('IGOR\n')
-            fp.write("WAVES {typ} /N=({shape}) '{name}'\n".format(
-                typ=ITX_TYPES[array.dtype.type],
-                shape=','.join(str(x) for x in array.shape),
-                name=name
-            ))
+            fp.write(f"WAVES {itx_type} /N=({shape}) '{name}'\n")
             fp.write('BEGIN\n')
-            if np.iscomplexobj(array):
-                def str_(x):
-                    return '%s\t%s' % (x.real, x.imag)
-            elif array.dtype.type is np.bytes_:
-                def str_(x):
-                    return '"' + self._escape_specials(x.decode(self._encoding)) + '"'
-            else:
-                str_ = str
+
             # write in column/row/layer/chunk order
             expanded = array
             while expanded.ndim < 4:
@@ -398,34 +391,45 @@ class IgorWave5(object):
                     fp.write('\n')
                 fp.write('\n')
             fp.write('END\n')
-            fp.write('X SetScale d,0,0,"{units}",\'{name}\'\n'.format(
-                units=(self._wave_header.dataUnits or self._extended_data_units).decode(),
-                name=name
-            ))
+
+            # data units
+            dataunits = (self._wave_header.dataUnits or self._extended_data_units).decode()
+            fp.write(f'X SetScale d,0,0,"{dataunits}",\'{name}\'\n')
+
+            # dimension scaling
             for idx, dim in list(enumerate(('x', 'y', 'z', 't')))[:array.ndim]:
-                dimUnits = self._wave_header.dimUnits[idx][:]
-                bunits = dimUnits.replace(b'\x00', b'') or self._extended_dimension_units[idx]
-                fp.write('X SetScale /P {dim},{start},{delta},"{units}",\'{name}\'\n'.format(
-                    dim=dim, start=self._wave_header.sfB[idx], delta=self._wave_header.sfA[idx],
-                    units=bunits.decode(self._encoding),
-                    name=name
-                ))
+                bdimUnits = (self._wave_header.dimUnits[idx][:].replace(b'\x00', b'') or self._extended_dimension_units[idx])
+                dimUnits = bdimUnits.decode(self._encoding)
+                start = self._wave_header.sfB[idx]
+                delta = self._wave_header.sfA[idx]
+                fp.write(f'X SetScale /P {dim},{start},{delta},"{dimUnits}",\'{name}\'\n')
+
+            # dimension labels
             for dimNumber, dimlabeldict in enumerate(self._dimension_labels):
                 for dimIndex, blabel in dimlabeldict.items():
-                    fp.write('X SetDimLabel {dimNumber},{dimIndex},\'{label}\',\'{name}\'\n'.format(
-                        dimNumber=dimNumber, dimIndex=dimIndex, label=blabel.decode(self._encoding), name=name
-                    ))
+                    label = blabel.decode(self._encoding)
+                    fp.write(f'X SetDimLabel {dimNumber},{dimIndex},\'{label}\',\'{name}\'\n')
+
+            # dependency formula
             if self._formula_with_trailing_null:
-                fp.write('X SetFormula \'{name}\', "{formula}"\n'.format(
-                    name=name, formula=self._formula_with_trailing_null[:-1].decode(self._encoding)
-                ))
+                formula = self._formula_with_trailing_null[:-1].decode(self._encoding)
+                fp.write(f'X SetFormula \'{name}\', "{formula}"\n')
+
+            # wave note
             if self._note:
-                fp.write('X Note \'{name}\', "{note}"\n'.format(
-                    name=name, note=self._escape_specials(self._note.decode(self._encoding))
-                ))
+                note = self._escape_specials(self._note.decode(self._encoding))
+                fp.write(f'X Note \'{name}\', "{note}"\n')
         finally:
             if fp is not file:
                 fp.close()
+
+    def _get_str_converter(self, array):
+        """get string converter based on the array data type. to be used in save_itx()."""
+        if np.iscomplexobj(array):
+            return lambda x: '%s\t%s' % (x.real, x.imag)
+        elif array.dtype.type is np.bytes_:
+            return lambda x: '"' + self._escape_specials(x.decode(self._encoding)) + '"'
+        return str
 
     def _check_array(self, image=False):
         if not isinstance(self.array, np.ndarray):
