@@ -165,6 +165,7 @@ class IgorWave5(object):
         self._int64_support = int64_support
         self.rename(name, on_errors)
         self._note = b''
+        self._formula_with_trailing_null = b''
         self._extended_data_units = b''
         self._extended_dimension_units = [b'', b'', b'', b'']
         self._dimension_labels = [dict(), dict(), dict(), dict()]
@@ -275,6 +276,15 @@ class IgorWave5(object):
         self._note = note.encode(self._encoding)
         self._bin_header.noteSize = len(self._note)
 
+    def set_formula(self, formula):
+        """set wave dependency formula.
+
+        :param formula: a string that represents the dependency formula. Clears the formula if empty (formula='')."""
+        self._formula_with_trailing_null = formula.encode(self._encoding)
+        if self._formula_with_trailing_null:
+            self._formula_with_trailing_null += b'\x00'
+        self._bin_header.formulaSize = len(self._formula_with_trailing_null)
+
     set_wavenote = set_note
 
     def save(self, file, image=False):
@@ -317,6 +327,9 @@ class IgorWave5(object):
                 fp.write(b''.join(a.ravel(order='F')))
             else:
                 fp.write(a.tobytes(order='F'))
+
+            # dependency formula
+            fp.write(self._formula_with_trailing_null)
 
             # wave note
             fp.write(self._note)
@@ -402,8 +415,12 @@ class IgorWave5(object):
                     fp.write('X SetDimLabel {dimNumber},{dimIndex},\'{label}\',\'{name}\'\n'.format(
                         dimNumber=dimNumber, dimIndex=dimIndex, label=blabel.decode(self._encoding), name=name
                     ))
+            if self._formula_with_trailing_null:
+                fp.write('X SetFormula \'{name}\', "{formula}"\n'.format(
+                    name=name, formula=self._formula_with_trailing_null[:-1].decode(self._encoding)
+                ))
             if self._note:
-                fp.write('X Note \'{name}\', "{note}"'.format(
+                fp.write('X Note \'{name}\', "{note}"\n'.format(
                     name=name, note=self._escape_specials(self._note.decode(self._encoding))
                 ))
         finally:

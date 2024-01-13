@@ -11,6 +11,7 @@ Features
 * Dimension scaling (:code:`IgorWave.set_dimscale`)
 * Dimension labels (:code:`IgorWave.set_dimlabel`)
 * Wave notes (:code:`IgorWave.set_note`)
+* Dependency formula (:code:`IgorWave.set_formula`)
 
 Installation
 ------------
@@ -131,6 +132,7 @@ Changelog
 v0.6.0 (2024-01-13)
 -------------------
 - Wave note support
+- Dependency formula support
 
 v0.5.0 (2023-07-08)
 -------------------

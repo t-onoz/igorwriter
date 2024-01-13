@@ -175,6 +175,22 @@ class WaveTestCase(unittest.TestCase):
             content = fp.read()
             self.assertIn(com, content)
 
+    def test_formula(self):
+        wavename = 'sinwave'
+        formula = 'sin(x)'
+        wave = IgorWave(np.zeros(101), name=wavename)
+        wave.set_formula(formula)
+        wave.set_note('sine wave')
+        wave.set_dimscale('x', 0, np.pi*2/100)
+        com = 'X SetFormula \'sinwave\', "sin(x)"'
+        with open(OUTDIR / 'formula.ibw', 'wb') as fp:
+            wave.save(fp)
+        with open(OUTDIR / 'formula.itx', 'w+t') as fp:
+            wave.save_itx(fp)
+            fp.seek(0)
+            content = fp.read()
+            self.assertIn(com, content)
+
     def test_invalid_name(self):
         name = '\'invalid_name\''  # wave cannot contain quotation marks
         array = np.random.randint(0, 100, 10, dtype=np.int32)
