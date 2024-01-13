@@ -10,6 +10,7 @@ Features
 * Data units (:code:`IgorWave.set_datascale`)
 * Dimension scaling (:code:`IgorWave.set_dimscale`)
 * Dimension labels (:code:`IgorWave.set_dimlabel`)
+* Wave notes (:code:`IgorWave.set_note`)
 
 Installation
 ------------
@@ -52,6 +53,13 @@ A two-dimensional array with dimension labels
 >>> wave.set_dimlabel(1, 1, 'ValueB')  # label for column 1
 >>> wave.set_dimlabel(1, 2, 'ValueC')  # label for column 2
 >>> wave.save('my2dwave.ibw')
+
+You can append arbitrary Igor commands to Igor Text files.
+
+>>> wave = IgorWave([1, 4, 9], name='wave0')
+>>> with open('wave0.itx', 'w') as fp:
+>>>     wave.save_itx(fp)
+>>>     fp.write("X Display 'wave0'\n")
 
 Unicode support
 ---------------
@@ -120,6 +128,9 @@ If you use e.g.
 Changelog
 =========
 
+v0.6.0 (2024-01-13)
+-------------------
+- Wave note support
 
 v0.5.0 (2023-07-08)
 -------------------
