@@ -164,6 +164,7 @@ class IgorWave5(object):
             self._encoding = _getpreferredencoding()
         self._int64_support = int64_support
         self.rename(name, on_errors)
+        self._note = b''
         self._extended_data_units = b''
         self._extended_dimension_units = [b'', b'', b'', b'']
         self._dimension_labels = [dict(), dict(), dict(), dict()]
@@ -266,6 +267,16 @@ class IgorWave5(object):
             dimLabelsSize = 0
         self._bin_header.dimLabelsSize[dimNumber] = dimLabelsSize
 
+    def set_note(self, note):
+        """Set the wave note.
+
+        :param note: a string that represents the wave note. Clears the note if empty (note='').
+        """
+        self._note = note.encode(self._encoding)
+        self._bin_header.noteSize = len(self._note)
+
+    set_wavenote = set_note
+
     def save(self, file, image=False):
         """save data as igor binary wave (.ibw) format.
 
@@ -306,6 +317,9 @@ class IgorWave5(object):
                 fp.write(b''.join(a.ravel(order='F')))
             else:
                 fp.write(a.tobytes(order='F'))
+
+            # wave note
+            fp.write(self._note)
 
             # extended data units, dimension units
             fp.write(self._extended_data_units)
@@ -388,6 +402,10 @@ class IgorWave5(object):
                     fp.write('X SetDimLabel {dimNumber},{dimIndex},\'{label}\',\'{name}\'\n'.format(
                         dimNumber=dimNumber, dimIndex=dimIndex, label=blabel.decode(self._encoding), name=name
                     ))
+            if self._note:
+                fp.write('X Note \'{name}\', "{note}"'.format(
+                    name=name, note=self._escape_specials(self._note.decode(self._encoding))
+                ))
         finally:
             if fp is not file:
                 fp.close()

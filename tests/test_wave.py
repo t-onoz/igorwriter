@@ -161,6 +161,20 @@ class WaveTestCase(unittest.TestCase):
                     content = fp.read()
                     self.assertRegex(content, com)
 
+    def test_note(self):
+        wavename = 'wave_with_note'
+        note = 'A\nB\nC'
+        com = 'X Note \'wave_with_note\', "A\\nB\\nC"'
+        wave = IgorWave([1, 2, 3], name=wavename)
+        wave.set_note(note)
+        with open(OUTDIR / 'note.ibw', 'wb') as fp:
+            wave.save(fp)
+        with open(OUTDIR / 'note.itx', 'w+t') as fp:
+            wave.save_itx(fp)
+            fp.seek(0)
+            content = fp.read()
+            self.assertIn(com, content)
+
     def test_invalid_name(self):
         name = '\'invalid_name\''  # wave cannot contain quotation marks
         array = np.random.randint(0, 100, 10, dtype=np.int32)
