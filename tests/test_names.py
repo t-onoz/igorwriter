@@ -72,10 +72,11 @@ class NameTestCase(unittest.TestCase):
             'do', 'DO',  # keywords
             'k1', 'K1',  # variables
         )
-        for name, liberal, long in product(names, (True, False), (True, False)):
-            self.assertRaises(igorwriter.errors.InvalidNameError, v.check_and_encode, name, liberal, long)
-            bname = v.check_and_encode(name, liberal, long, on_errors='fix')
-            desired = (name + '_').encode(encoding)
+        for name, liberal, long, allow_builtins in product(names, (True, False), (True, False), (True, False)):
+            if not allow_builtins:
+                self.assertRaises(igorwriter.errors.InvalidNameError, v.check_and_encode, name, liberal, long)
+            bname = v.check_and_encode(name, liberal, long, allow_builtins, on_errors='fix')
+            desired = name.encode(encoding) if allow_builtins else (name + '_').encode(encoding)
             self.assertEqual(bname, desired)
 
 

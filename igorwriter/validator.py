@@ -53,12 +53,13 @@ def _fix_conflicts(name):
     return name, 'name must not conflict with built-in operations, functions, etc.'
 
 
-def check_and_encode(name, liberal=True, long=False, on_errors='raise', encoding=None):
+def check_and_encode(name, liberal=True, long=False, allow_builtins=False,  on_errors='raise', encoding=None):
     """
 
     :param name: name of an object
     :param liberal: whether Liberal Object Names are allowed or not
     :param long: whether Long Object Names (introduced in Igor 8.00) are allowed or not
+    :param allow_builtins: whether conflicts with builtin names are allowed or not
     :param on_errors: If 'raise', raises InvalidNameError when name is invalid, otherwise tries to fix errors.
     :param encoding: text encoding. If None, it is set with getpreferredencoding()
     :return:
@@ -74,6 +75,7 @@ def check_and_encode(name, liberal=True, long=False, on_errors='raise', encoding
         name = _fix_or_raise(_fix_ng_letters, on_errors=on_errors)(name)
         if not liberal:
             name = _fix_or_raise(_fix_standard, on_errors=on_errors)(name)
-        name = _fix_or_raise(_fix_conflicts, on_errors=on_errors)(name)
+        if not allow_builtins:
+            name = _fix_or_raise(_fix_conflicts, on_errors=on_errors)(name)
         name_after = name
     return name.encode(encoding)

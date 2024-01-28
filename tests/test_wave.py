@@ -128,7 +128,9 @@ class WaveTestCase(unittest.TestCase):
     def test_dimscale(self):
         array = np.random.randint(0, 100, 10, dtype=np.int32)
         wave = IgorWave(array)
-        wave.set_dimscale('x', 0, 0.01, 's')
+        wave.set_dimscale('x', 1, 0.01, 's')
+        self.assertAlmostEqual(wave._wave_header.sfA[0], 0.01)
+        self.assertAlmostEqual(wave._wave_header.sfB[0], 1.0)
         with open(OUTDIR / 'dimscale.ibw', 'wb') as fp:
             wave.save(fp)
         with open(OUTDIR / 'dimscale.itx', 'w') as fp:
@@ -189,11 +191,15 @@ class WaveTestCase(unittest.TestCase):
         formula = 'sin(x)'
         wave = IgorWave(np.zeros(101), name=wavename)
         wave.set_formula(formula)
+        self.assertEqual(wave._bin_header.formulaSize, len(formula)+1)
         wave.set_note('sine wave')
         wave.set_dimscale('x', 0, np.pi*2/100)
         com = 'X SetFormula \'sinwave\', "sin(x)"'
-        with open(OUTDIR / 'formula.ibw', 'wb') as fp:
+        with open(OUTDIR / 'formula.ibw', 'w+b') as fp:
             wave.save(fp)
+            fp.seek(0)
+            content = fp.read()
+            self.assertIn(b'sin(x)\x00sine wave', content)
         with open(OUTDIR / 'formula.itx', 'w+t') as fp:
             wave.save_itx(fp)
             fp.seek(0)
@@ -227,7 +233,7 @@ class WaveTestCase(unittest.TestCase):
             w = IgorWave(a, wavename)
             self.assertRaises(igorwriter.errors.InvalidNameError, w.set_dimlabel, 0, 0, "'")
             w.set_dimlabel(0, 0, "a"*31)
-            self.assertRaises(ValueError, w.set_dimlabel, 0, 0, "a"*32)
+            self.assertRaises(igorwriter.errors.InvalidNameError, w.set_dimlabel, 0, 0, "a"*32)
         with self.subTest('dimlabel for entire row'):
             label = 'rowname'
             w = IgorWave(a, wavename)
@@ -328,8 +334,11 @@ class WaveTestCase(unittest.TestCase):
             self.assertTrue('\\\'' in string)
             self.assertTrue('\\"' in string)
             self.assertTrue('\\\\' in string)
-        with open(OUTDIR / 'textwave_spchars.ibw', 'wb') as fp:
+        with open(OUTDIR / 'textwave_spchars.ibw', 'w+b') as fp:
             w.save(fp)
+            fp.seek(0)
+            content = fp.read()
+            self.assertIn(b''.join(e.encode(w._encoding) for e in a), content)
 
     def test_optional_data(self):
         # wave with a lot of optional data
@@ -405,7 +414,7 @@ class WaveTestCase(unittest.TestCase):
         with self.subTest('Series object with uniform Index with a name'):
             s.index.name = 'myindex'
             w = IgorWave(s, 'series_uniformind')
-            self.assertEqual(w._dimension_labels[0][-1], b'myindex')
+            self.assertEqual(w._dimension_labels[0][-1].rstrip(b'\x00'), b'myindex')
         with self.subTest('Series object with nonuniform Index'):
             s = pd.Series([1, 2, 3])
             s.index = [1, 2, 3.05]

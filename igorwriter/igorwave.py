@@ -165,10 +165,10 @@ class IgorWave5(object):
         self._int64_support = int64_support
         self.rename(name, on_errors)
         self._note = b''
-        self._formula_with_trailing_null = b''
+        self._formula = b''
         self._extended_data_units = b''
         self._extended_dimension_units = [b'', b'', b'', b'']
-        self._dimension_labels = [dict(), dict(), dict(), dict()]
+        self._dimension_labels = (dict(), dict(), dict(), dict())
 
         if isinstance(array, Series):
             self.array = self._parse_Series(array)
@@ -238,27 +238,16 @@ class IgorWave5(object):
 
         :param dimNumber: 0 (rows), 1 (columns), 2 (layers), or 3 (chunks)
         :param dimIndex: if -1, sets the label for the entire dimension, if >= 0, sets the label for that element of the dimension.
-        :param label: label string (up to 31 characters)
+        :param label: label string (up to 31 characters). Clears the label if empty ('').
         """
         if dimNumber not in [0, 1, 2, 3]:
             raise ValueError('dimNumber must be 0, 1, 2, or 3.')
 
-        # Dimension labels cannot contain illegal characters (", ', :, ; and control characters),
-        # but they can conflict with built-in names.
-        for s in validator.NG_LETTERS:
-            if s in label:
-                raise igorwriter.errors.InvalidNameError(
-                    'thelabel contains illegal characters (", \', :, ;, and control characters)'
-                )
-        blabel = label.encode(self._encoding)
-        if len(blabel) > 31:
-            raise ValueError('Dimension labels cannot be longer than 31 bytes.')
-
-        if label == '':
-            # if label is empty, remove the label.
-            self._dimension_labels[dimNumber].pop(dimIndex, None)
+        if label:
+            blabel = validator.check_and_encode(label, liberal=True, long=False, allow_builtins=True)
+            self._dimension_labels[dimNumber][dimIndex] = blabel + b'\x00' * (32 - len(blabel))
         else:
-            self._dimension_labels[dimNumber][dimIndex] = blabel
+            self._dimension_labels[dimNumber].pop(dimIndex, None)
 
         # calculate new dimLabelsSize
         if self._dimension_labels[dimNumber]:
@@ -280,10 +269,9 @@ class IgorWave5(object):
         """set wave dependency formula.
 
         :param formula: a string that represents the dependency formula. Clears the formula if empty (formula='')."""
-        self._formula_with_trailing_null = formula.encode(self._encoding)
-        if self._formula_with_trailing_null:
-            self._formula_with_trailing_null += b'\x00'
-        self._bin_header.formulaSize = len(self._formula_with_trailing_null)
+        bformula = formula.encode(self._encoding) + b'\x00' if formula else b''
+        self._formula = bformula
+        self._bin_header.formulaSize = len(bformula)
 
     set_wavenote = set_note
 
@@ -330,7 +318,7 @@ class IgorWave5(object):
                 fp.write(a.tobytes(order='F'))
 
             # dependency formula
-            fp.write(self._formula_with_trailing_null)
+            fp.write(self._formula)
 
             # wave note
             fp.write(self._note)
@@ -344,8 +332,7 @@ class IgorWave5(object):
             for dimlabeldict in self._dimension_labels:
                 if dimlabeldict:
                     for i in range(-1, max(dimlabeldict)+1):
-                        b = dimlabeldict.get(i, b'\x00')
-                        b += b'\x00' * (32-len(b))
+                        b = dimlabeldict.get(i, b'\x00'*32)
                         assert len(b) == 32
                         fp.write(b)
 
@@ -407,12 +394,12 @@ class IgorWave5(object):
             # dimension labels
             for dimNumber, dimlabeldict in enumerate(self._dimension_labels):
                 for dimIndex, blabel in dimlabeldict.items():
-                    label = blabel.decode(self._encoding)
+                    label = blabel.rstrip(b'\x00').decode(self._encoding)
                     fp.write(f'X SetDimLabel {dimNumber},{dimIndex},\'{label}\',\'{name}\'\n')
 
             # dependency formula
-            if self._formula_with_trailing_null:
-                formula = self._formula_with_trailing_null[:-1].decode(self._encoding)
+            if self._formula:
+                formula = self._formula.rstrip(b'\x00').decode(self._encoding)
                 fp.write(f'X SetFormula \'{name}\', "{formula}"\n')
 
             # wave note
