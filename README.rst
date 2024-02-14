@@ -125,6 +125,9 @@ If you use e.g.
     
 :code:`plt.imshow` and Image Plot will give the same results.
 
+The :code:`image=True` option transposes rows and columns of the underlying array,
+but does not swap data units, dimension scaling, etc (You need to change them manually).
+
 
 Changelog
 =========
