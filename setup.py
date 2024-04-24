@@ -8,7 +8,7 @@ from os import path
 here = path.abspath(path.dirname(__file__))
 
 # Get the long description from the README file
-with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
+with open(path.join(here, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(
@@ -16,6 +16,7 @@ setup(
     version='0.6.0',
     description='Write IGOR binary (.ibw) or text (.itx) files from numpy array',
     long_description=long_description,
+    long_description_content_type='text/markdown',
     url='https://github.com/t-onoz/igorwriter',
     author='t-onoz',
     license='MIT',
