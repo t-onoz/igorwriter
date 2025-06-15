@@ -71,8 +71,7 @@ You can append arbitrary Igor commands to Igor Text files.
 wave = IgorWave([1, 4, 9], name='wave0') 
 with open('wave0.itx', 'w') as fp: 
     wave.save_itx(fp) 
-
-fp.write("X Display 'wave0'\n")
+    fp.write("X Display 'wave0'\n")
 ```
 
 ## Unicode support
