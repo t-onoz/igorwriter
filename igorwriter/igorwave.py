@@ -451,8 +451,10 @@ class IgorWave5(object):
             a = self.array.astype(np.int8)
         elif type_ is np.float16:
             a = self.array.astype(np.float32)
-        elif type_ is np.clongdouble:
+        elif type_ in (np.longdouble, getattr(np, 'float96', None), getattr(np, 'float128', None)):
             a = self.array.astype(np.float64)
+        elif type_ in (np.clongdouble, getattr(np, 'complex96', None), getattr(np, 'complex256', None)):
+            a = self.array.astype(np.complex128)
         elif type_ is np.datetime64:
             self.set_datascale('dat')
             a = (self.array - np.datetime64('1904-01-01 00:00:00')) / np.timedelta64(1, 's')

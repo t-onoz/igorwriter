@@ -74,8 +74,31 @@ class WaveTestCase(unittest.TestCase):
 
     def test_array_type(self):
         array = np.random.randint(0, 100, 10)
-        valid_types = (np.bool_, np.float16, np.int32, np.uint32, np.int64, np.uint64, np.float32, np.float64, np.complex128, np.object_, np.str_, np.bytes_, int, float)
-        expected_np_types = (np.int8, np.float32, np.int32, np.uint32, np.int32, np.uint32, np.float32, np.float64, np.complex128, np.float64, np.bytes_, np.bytes_, np.int32, np.float64)
+        valid_types = [
+            np.bool_, np.float16, np.int32, np.uint32, np.int64,
+            np.uint64, np.float32, np.float64, np.complex128,
+            np.str_, np.bytes_, int, float, np.longdouble,
+            np.clongdouble,
+        ]
+        expected_np_types = [
+            np.int8, np.float32, np.int32, np.uint32, np.int32,
+            np.uint32, np.float32, np.float64, np.complex128,
+            np.bytes_, np.bytes_, np.int32, np.float64, np.float64,
+            np.complex128,
+        ]
+        if hasattr(np, 'float96'):
+            valid_types.append(np.float96)
+            expected_np_types.append(np.float64)
+        if hasattr(np, 'float128'):
+            valid_types.append(np.float128)
+            expected_np_types.append(np.float64)
+        if hasattr(np, 'complex192'):
+            valid_types.append(np.complex192)
+            expected_np_types.append(np.complex128)
+        if hasattr(np, 'complex256'):
+            valid_types.append(np.complex256)
+            expected_np_types.append(np.complex128)
+
         for (vt, ent) in zip(valid_types, expected_np_types):
             with self.subTest('type: %r' % vt):
                 wave = IgorWave(array.astype(vt), int64_support=False)
@@ -89,6 +112,18 @@ class WaveTestCase(unittest.TestCase):
                     fp.seek(0)
                     content = fp.read()
                     self.assertIn(com, content)
+
+    def test_complex(self):
+        a = np.array([1+2j, 3+4j, 5+6j, 7+8j])
+        w = IgorWave(a, 'complexwave')
+        with open(OUTDIR / 'complex_wave.itx', 'w+t') as fp:
+            w.save_itx(fp)
+            fp.seek(0)
+            content = fp.read()
+            self.assertIn('WAVES /C/D', content)
+            self.assertIn('1.0\t2.0\n3.0\t4.0\n5.0\t6.0\n7.0\t8.0', content)
+        with open(OUTDIR / 'complex_wave.ibw', 'wb') as fp:
+            w.save(fp)
 
     def test_bool_to_itx(self):
         a = np.array([True, True, True, True, True], dtype=np.bool_)
