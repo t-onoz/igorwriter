@@ -431,7 +431,19 @@ class IgorWave5(object):
         return a
 
     def _cast_array(self):
-        # check array dtype and try type casting if necessary
+        """
+        Prepare the input array for IgorWave export:
+        - Casts to compatible dtype (e.g., float32, int32, etc.)
+        - Converts special types like datetime64 or str
+        - Handles np.object_ via type inference
+        - Modifies internal headers if necessary (e.g., for bytes or str types)
+
+        Returns:
+            np.ndarray: Converted array ready for export.
+
+        Raises:
+            OverflowError, TypeError, ValueError
+        """
         type_ = self.array.dtype.type
         if type_ is np.bytes_:
             # 255 means binary data
