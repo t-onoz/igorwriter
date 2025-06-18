@@ -15,9 +15,15 @@ Write Igor Binary Wave (.ibw) or Igor Text (.itx) files from numpy array
 
 ## Installation
 
+From PyPI:
 ``` doscon
 $ pip install igorwriter
 ```
+Or from conda-forge:
+``` doscon
+$ conda install conda-forge::igorwriter
+```
+
 
 ## Usage
 
