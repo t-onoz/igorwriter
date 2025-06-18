@@ -425,6 +425,20 @@ class WaveTestCase(unittest.TestCase):
         with open(OUTDIR / 'unicode_wave.itx', encoding='utf-8') as f:
             f.read()
 
+    def test_image_mode(self):
+        a = np.array([[1, 2, 3], [4, 5, 6]])
+        w = IgorWave(a, 'imagewave')
+        a1 = w._check_array()
+        a2 = w._check_array(image=True)
+        np.testing.assert_allclose(a, a1)
+        np.testing.assert_allclose(a.T, a2)
+        w.save(OUTDIR / 'imagewave_tr.ibw', image=True)
+        np.testing.assert_array_equal(w._wave_header.nDim, (3, 2, 0, 0))
+        w.save_itx(OUTDIR / 'imagewave_tr.itx', image=True)
+        w.save(OUTDIR / 'imagewave.ibw')
+        np.testing.assert_array_equal(w._wave_header.nDim, (2, 3, 0, 0))
+        w.save_itx(OUTDIR / 'imagewave.itx')
+
     def test_pandas_series(self):
         import pandas as pd
         with self.subTest('simple Series object'):
