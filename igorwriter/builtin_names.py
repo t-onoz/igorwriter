@@ -1,9 +1,11 @@
-import os
+import importlib.resources
 
-DIR = os.path.join(os.path.dirname(__file__), 'builtins')
+BUILTIN_DIR = importlib.resources.files("igorwriter.builtins")
 
-
-operations = tuple(l.rstrip().lower() for l in open(os.path.join(DIR, 'operations.txt')).readlines())
-functions = tuple(l.rstrip().lower() for l in open(os.path.join(DIR, 'functions.txt')).readlines())
-keywords = tuple(l.rstrip().lower() for l in open(os.path.join(DIR, 'keywords.txt')).readlines())
-variables = tuple('k%d' % i for i in range(20)) + ('veclen',)
+with BUILTIN_DIR.joinpath("operations.txt").open("r") as f:
+    operations = tuple(ln.rstrip().lower() for ln in f.readlines())
+with BUILTIN_DIR.joinpath("functions.txt").open("r") as f:
+    functions = tuple(ln.rstrip().lower() for ln in f.readlines())
+with BUILTIN_DIR.joinpath("keywords.txt").open("r") as f:
+    keywords = tuple(ln.rstrip().lower() for ln in f.readlines())
+variables = tuple("k%d" % i for i in range(20)) + ("veclen",)
