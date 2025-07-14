@@ -1,6 +1,6 @@
 import importlib.resources
 
-BUILTIN_DIR = importlib.resources.files("igorwriter.builtins")
+BUILTIN_DIR = importlib.resources.files("igorwriter").joinpath("builtins")
 
 with BUILTIN_DIR.joinpath("operations.txt").open("r") as f:
     operations = tuple(ln.rstrip().lower() for ln in f.readlines())
