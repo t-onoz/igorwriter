@@ -530,6 +530,34 @@ class WaveTestCase(unittest.TestCase):
             bunits = wave._extended_data_units
             self.assertEqual(bunits, expected)
 
+    def test_long_name(self):
+        long_name = 'LongWaveNameTest_NameLongerThan32Bytes'
+        wave = IgorWave([1.0, 2.0, 3.0, 4.0, 5.0], name=long_name, long_name_support=True)
+        self.assertEqual(wave._wave_header.bname, b'')
+        self.assertEqual(wave.name, long_name)
+        with open(OUTDIR / 'long_name.ibw', 'w+b') as fp:
+            wave.save(fp)
+            fp.seek(0)
+            content = fp.read()
+            self.assertIn(long_name.encode('utf-8'), content)
+        with open(OUTDIR / 'long_name.itx', 'w+t') as fp:
+            wave.save_itx(fp)
+            fp.seek(0)
+            content = fp.read()
+            self.assertRegex(content, f"WAVES.*'{long_name}'")
+        # with dimension labels
+        wave.set_dimlabel(0, 0, 'label0')
+        wave.set_dimlabel(0, 2, 'label2')
+        wave.set_dimlabel(0, 3, 'X'*33)
+        self.assertEqual(wave._bin_header.dimLabelsSize[0], 1+7+1+7+34)
+        with open(OUTDIR / 'long_name_and_dimlabels.ibw', 'w+b') as fp:
+            wave.save(fp)
+            fp.seek(0)
+            content = fp.read()
+            self.assertIn(b'label0\x00\x00label2\x00', content)
+        with open(OUTDIR / 'long_name_and_dimlabels.itx', 'w+t') as fp:
+            wave.save_itx(fp)
+
 
 if __name__ == '__main__':
     unittest.main()

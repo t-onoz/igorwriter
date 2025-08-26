@@ -70,7 +70,8 @@ class BinHeader5(ctypes.Structure):
         ('dimEUnitsSize', ctypes.c_int32 * MAXDIMS),		# The size of optional extended dimension units.
         ('dimLabelsSize', ctypes.c_int32 * MAXDIMS),		# The size of optional dimension labels.
         ('sIndicesSize', ctypes.c_int32),					# The size of string indices if this is a text wave.
-        ('optionsSize1', ctypes.c_int32),					# Reserved. Write zero. Ignore on read.
+        ('longWaveNameSize', ctypes.c_int16),				# The length of the long wave name, introduced in Igor 8.0
+        ('optionsSize1', ctypes.c_int16),					# Reserved. Write zero. Ignore on read.
         ('optionsSize2', ctypes.c_int32),					# Reserved. Write zero. Ignore on read.
     ]
 
@@ -140,7 +141,7 @@ class WaveHeader5(ctypes.Structure):
 
 
 class IgorWave5(object):
-    def __init__(self, array, name='wave0', on_errors='fix', unicode=True, int64_support=False):
+    def __init__(self, array, name='wave0', on_errors='fix', unicode=True, int64_support=False, long_name_support=False):
         """
 
         :param array: array_like object
@@ -150,9 +151,14 @@ class IgorWave5(object):
             If you use Igor Pro 6 or older and want to use non-ascii characters, set it to False.
         :param int64_support: enables 64-bit integer support (requires Igor Pro 7 or later).
             Note: If enabled, it will break backward compatibility for Igor Pro 6 or earlier.
+        :param long_name_support: enables long object name support (requires Igor Pro 8.0 or later).
+            Note: If enabled, it will break backward compatibility for Igor Pro 7 or earlier.
         """
         self._bin_header = BinHeader5()
         self._wave_header = WaveHeader5()
+        if long_name_support:
+            self._bin_header.version = 7
+            self._wave_header.waveNameEncoding = 1
         if unicode:
             self._wave_header.waveNameEncoding = 1
             self._wave_header.waveUnitsEncoding = 1
@@ -163,12 +169,14 @@ class IgorWave5(object):
         else:
             self._encoding = _getpreferredencoding()
         self._int64_support = int64_support
-        self.rename(name, on_errors)
+        self._long_name_support = long_name_support
         self._note = b''
         self._formula = b''
         self._extended_data_units = b''
         self._extended_dimension_units = [b'', b'', b'', b'']
         self._dimension_labels = (dict(), dict(), dict(), dict())
+        self._long_wave_name = b''
+        self.rename(name, on_errors)
 
         if isinstance(array, Series):
             self.array = self._parse_Series(array)
@@ -177,6 +185,7 @@ class IgorWave5(object):
         else:
             self.array = np.asarray(array)
 
+
     def rename(self, name, on_errors='fix'):
         """
 
@@ -184,12 +193,21 @@ class IgorWave5(object):
         :param on_errors: behavior when invalid name is given. 'fix': fix errors. 'raise': raise exception.
         :return:
         """
-        bname = validator.check_and_encode(name, on_errors=on_errors, encoding=self._encoding)
-        self._wave_header.bname = bname
+        if self._bin_header.version == 7:
+            # The long wave name is always written using UTF-8.
+            bname = validator.check_and_encode(name, on_errors=on_errors, encoding='utf-8', long=True)
+            self._bin_header.longWaveNameSize = len(bname)
+            self._long_wave_name = bname
+        else:
+            bname = validator.check_and_encode(name, on_errors=on_errors, encoding=self._encoding)
+            self._wave_header.bname = bname
 
     @property
     def name(self):
-        return self._wave_header.bname.decode(self._encoding)
+        if self._bin_header.version == 7:
+            return self._long_wave_name.decode('utf-8')
+        else:
+            return self._wave_header.bname.decode(self._encoding)
 
     def set_dimscale(self, dim, start, delta, units=None):
         """Set scale information of each axis.
@@ -244,15 +262,25 @@ class IgorWave5(object):
             raise ValueError('dimNumber must be 0, 1, 2, or 3.')
 
         if label:
-            blabel = validator.check_and_encode(label, liberal=True, long=False, allow_builtins=True)
-            self._dimension_labels[dimNumber][dimIndex] = blabel + b'\x00' * (32 - len(blabel))
+            if self._bin_header.version == 7:
+                blabel = validator.check_and_encode(label, liberal=True, long=True, allow_builtins=True)
+                self._dimension_labels[dimNumber][dimIndex] = blabel + b'\x00'
+            else:
+                blabel = validator.check_and_encode(label, liberal=True, long=False, allow_builtins=True)
+                self._dimension_labels[dimNumber][dimIndex] = blabel + b'\x00' * (32 - len(blabel))
         else:
             self._dimension_labels[dimNumber].pop(dimIndex, None)
 
         # calculate new dimLabelsSize
         if self._dimension_labels[dimNumber]:
-            # Each dimension has max(dimIndex) + 2 (-1, 0, .. max(dimIndex)) labels, and each of them contains 32 bytes
-            dimLabelsSize = 32 * (max(self._dimension_labels[dimNumber]) + 2)
+            # Each dimension has max(dimIndex) + 2 (-1, 0, .. max(dimIndex)) labels.
+            if self._bin_header.version == 7:
+                dimLabelsSize = 0
+                for dimIndex in range(-1, max(self._dimension_labels[dimNumber]) + 1):
+                    dimLabelsSize += len(self._dimension_labels[dimNumber].get(dimIndex, b'\x00'))
+            else:
+                # each label contains 32 bytes
+                dimLabelsSize = 32 * (max(self._dimension_labels[dimNumber]) + 2)
         else:
             dimLabelsSize = 0
         self._bin_header.dimLabelsSize[dimNumber] = dimLabelsSize
@@ -332,8 +360,11 @@ class IgorWave5(object):
             for dimlabeldict in self._dimension_labels:
                 if dimlabeldict:
                     for i in range(-1, max(dimlabeldict)+1):
-                        b = dimlabeldict.get(i, b'\x00'*32)
-                        assert len(b) == 32
+                        if self._bin_header.version == 7:
+                            b = dimlabeldict.get(i, b'\x00')
+                        else:
+                            b = dimlabeldict.get(i, b'\x00'*32)
+                            assert len(b) == 32
                         fp.write(b)
 
             # string indices if this is a text wave.
@@ -344,6 +375,9 @@ class IgorWave5(object):
                     pos += len(s)
                     sindices[idx] = pos
                 fp.write(sindices.tobytes())
+
+            # long wave name
+            fp.write(self._long_wave_name)
         finally:
             if fp is not file:
                 fp.close()
@@ -354,7 +388,7 @@ class IgorWave5(object):
         :param file: file name or text-file object.
         :param image: if True, rows and columns are transposed."""
         array = self._check_array(image=image)
-        name = self._wave_header.bname.decode(self._encoding)
+        name = self.name
         itx_type = ITX_TYPES[array.dtype.type]
         shape = ','.join(str(x) for x in array.shape)
         str_ = self._get_str_converter(array)
