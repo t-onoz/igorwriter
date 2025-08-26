@@ -101,6 +101,10 @@ print(wave.name)  # wave_0
 wave = IgorWave(array, name='wave:0', on_errors='raise')
 ```
 
+Igor Pro 8.0+ supports wave names with more than 31 bytes. To support longer wave names, 
+please set `long_name_support=True` when calling `IgorWave()`. Note that setting `long_name_support=True`
+breaks backward compatibility for older Igor Pro regardless of the actual name length.
+
 ## Pint integration
 
 If [Pint](https://github.com/hgrecco/pint) Quantity objects are passed
@@ -157,6 +161,10 @@ array, but does not swap data units, dimension scaling, etc. (You need to
 change them manually).
 
 # Changelog
+
+## v0.7.0 (2025-08-26)
+
+-   Added support for Long Name Objects (wave names with more than 31 bytes).
 
 ## v0.6.0 (2024-01-13)
 
