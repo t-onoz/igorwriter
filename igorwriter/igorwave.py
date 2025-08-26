@@ -422,6 +422,8 @@ class IgorWave5(object):
         if not isinstance(self.array, np.ndarray):
             raise ValueError('Please set an array before save')
         a = self._cast_array()
+        assert a.dtype.type in TYPES
+        assert a.dtype.byteorder in ('=', '|')
         if a.ndim > 4:
             raise ValueError('Dimension of more than 4 is not supported.')
 
@@ -444,60 +446,93 @@ class IgorWave5(object):
         Raises:
             OverflowError, TypeError, ValueError
         """
-        type_ = self.array.dtype.type
-        if type_ is np.bytes_:
-            # 255 means binary data
-            self._wave_header.textWaveContentEncoding = 255
-            a = self.array
-        elif (not self._int64_support) and type_ in (np.int64, np.uint64):
-            # Convert to 32-bit integers
-            to_type = {np.int64: np.int32, np.uint64: np.uint32}[type_]
-            tinfo = np.iinfo(to_type)
-            if (tinfo.min <= np.min(self.array)) and (np.max(self.array) <= tinfo.max):
-                a = self.array.astype(to_type)
-            else:
-                msg = (f'Overflow detected when converting an array with type {type_!r}. '
-                    'If you are using Igor Pro 7 or later, try setting int64_support=True when calling IgorWave().')
-                raise OverflowError(msg)
-        elif type_ is np.bool_:
-            a = self.array.astype(np.int8)
-        elif type_ is np.float16:
-            a = self.array.astype(np.float32)
-        elif type_ in (np.longdouble, getattr(np, 'float96', None), getattr(np, 'float128', None)):
-            a = self.array.astype(np.float64)
-        elif type_ in (np.clongdouble, getattr(np, 'complex192', None), getattr(np, 'complex256', None)):
-            a = self.array.astype(np.complex128)
-        elif type_ is np.datetime64:
-            self.set_datascale('dat')
-            a = (self.array - np.datetime64('1904-01-01 00:00:00')) / np.timedelta64(1, 's')
-        elif type_ is np.str_:
-            a = np.char.encode(self.array, encoding=self._encoding)
-        elif type_ is np.object_:
-            # infer data type
-            candidates = [np.float64, np.str_, np.bytes_]
-            for t in candidates:
-                try:
-                    a = self.array.astype(t)
-                except (ValueError, UnicodeError):
-                    continue
-                else:
-                    msg = ("Data will be converted from np.object_ to numpy.{}. "
-                           "To avoid this warning, "
-                           "you may manually convert the data before calling IgorWave().").format(t.__name__)
-                    if t is np.str_:
-                        a = np.char.encode(a, encoding=self._encoding)
-                    elif t is np.bytes_:
-                        # 255 means binary data
-                        self._wave_header.textWaveContentEncoding = 255
-                    warnings.warn(msg, category=TypeConversionWarning)
-                    break
-            else:
-                raise ValueError('The array could not be converted to Igor-compatible types.')
-        elif type_ in TYPES:
-            a = self.array
+        # Ensure native byte-order
+        a = self.array.astype(self.array.dtype.newbyteorder('='), copy=False)
+        for type_ in TYPES:
+            if type_ in (np.int64, np.uint64) and not self._int64_support:
+                continue
+            if a.dtype.type is type_:
+                if type_ is np.bytes_:
+                    self._wave_header.textWaveContentEncoding = 255  # 255 means binary data
+                return a
+            elif a.dtype == type_:
+                # This will handle inconsistent (same data but different type objects) type aliases.
+                # e.g. np.longdouble vs. np.float64 on Windows, np.longlong vs. np.int64 on Linux
+                return a.astype(type_, copy=True, casting='safe')
+        if a.dtype.type is np.bool_:
+            return self._handle_bool(a)
+        if a.dtype.type is np.datetime64:
+            return self._handle_datetime(a)
+        if a.dtype.type in [np.int64, np.longlong, np.uint64, np.ulonglong] and not self._int64_support:
+            return self._handle_large_integer(a)
+        if a.dtype.type is np.float16:
+            return self._handle_float16(a)
+        if a.dtype.type in [getattr(np, 'float96', None), getattr(np, 'float128', None)]:
+            return self._handle_extended_float(a)
+        if a.dtype.type in [getattr(np, 'complex192', None), getattr(np, 'complex256', None)]:
+            return self._handle_extended_complex(a)
+        if np.issubdtype(a.dtype, np.character):
+            return self._handle_character(a)
+        return self._handle_unknown(a)
+
+    def _handle_bool(self, array):
+        _warn_type_casting(array.dtype, np.dtype('int8'))
+        return array.astype(np.int8)
+
+    def _handle_datetime(self, array):
+        # handles datetime64 arrays.
+        # IGOR stores date/time waves as double precision float representing seconds since 1904-01-01 00:00:00.
+        # The units of the wave data must be set as "dat."
+        # Both IGOR and numpy do not consider leap seconds.
+        self.set_datascale('dat')
+        return (array - np.datetime64('1904-01-01 00:00:00')) / np.timedelta64(1, 's')
+
+    def _handle_large_integer(self, array):
+        # First try to cast into 32-bit integer, then 64-bit float.
+        to_type = np.int32 if np.iinfo(array.dtype).min < 0 else np.uint32
+        to_iinfo = np.iinfo(to_type)
+        if (np.min(array) < to_iinfo.min) or (np.max(array) > to_iinfo.max):
+            to_type = np.float64
+        msg = f'64-bit integer data is not supported on older Igor Pro, so data will be cast into {np.dtype(to_type)!r}.'
+        msg +=' To enable int64 support, set int64_support=True when calling IgorWave() (requires Igor Pro 7.0 or later)'
+        _warn_type_casting(array.dtype, np.dtype(to_type), msg)
+        return array.astype(to_type)
+
+    def _handle_float16(self, array):
+        _warn_type_casting(array.dtype, np.dtype(np.float32))
+        return array.astype(np.float32)
+
+    def _handle_extended_float(self, array):
+        _warn_type_casting(array.dtype, np.dtype(np.float64))
+        return array.astype(np.float64)
+
+    def _handle_extended_complex(self, array):
+        _warn_type_casting(array.dtype, np.dtype(np.complex128))
+        return array.astype(np.complex128)
+
+    def _handle_character(self, array):
+        if array.dtype.type is np.str_:
+            return np.char.encode(array, encoding=self._encoding)
         else:
-            raise TypeError('The array data type %r is not compatible with Igor.' % type_)
-        assert a.dtype.type in TYPES
+            self._wave_header.textWaveContentEncoding = 255  # 255 means binary data
+            return array.astype(np.bytes_, copy=False)
+
+    def _handle_unknown(self, array):
+        # infer data type
+        for t in [np.float64, np.str_, np.bytes_]:
+            try:
+                a = array.astype(t)
+            except Exception:
+                pass
+            else:
+                break
+        else:
+            raise ValueError(f'Failed to cast {array!r} with {array.dtype!r} into Igor-compatible one.')
+        _warn_type_casting(array.dtype, a.dtype)
+        if t is np.str_:
+            a = np.char.encode(a, self._encoding)
+        if t is np.bytes_:
+            self._wave_header.textWaveContentEncoding = 255  # 255 means binary data
         return a
 
     def _parse_Series(self, s):
@@ -557,6 +592,12 @@ class IgorWave5(object):
 
     def __repr__(self):
         return '<IgorWave \'%s\' at %s>' % (self.name, hex(id(self)))
+
+
+def _warn_type_casting(before, after, msg=None):
+    if msg is None:
+        msg = f'Unsupported data type "{before!r}" was cast into "{after!r}."'
+    warnings.warn(msg, category=TypeConversionWarning)
 
 
 IgorWave = IgorWave5

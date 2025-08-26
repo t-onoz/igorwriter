@@ -1,5 +1,6 @@
 import unittest
 import os
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -23,7 +24,11 @@ class WaveTestCase(unittest.TestCase):
     def test_datetime(self):
         array = np.arange(np.datetime64('2019-01-01'), np.datetime64('2019-12-31'), np.timedelta64(1, 'D'))
         wave = IgorWave(array)
-        self.assertIs(wave._check_array().dtype.type, np.float64)
+        converted = wave._check_array()
+        expected = (array - np.datetime64('1904-01-01 00:00:00')) / np.timedelta64(1, 's')
+        self.assertIs(converted.dtype.type, np.float64)
+        np.testing.assert_allclose(converted, expected)
+        self.assertEqual(wave._wave_header.dataUnits, b'dat')
         with open(OUTDIR / 'datetime.ibw', 'wb') as bin:
             wave.save(bin)
         with open(OUTDIR / 'datetime.itx', 'w', encoding=ENCODING) as text:
@@ -72,64 +77,53 @@ class WaveTestCase(unittest.TestCase):
             with open(ibw, 'wb') as fp:
                 wave.save(fp)
 
-    def test_array_type(self):
-        array = np.random.randint(0, 100, 10)
-        valid_types = [
-            np.bool_, np.float16, np.int32, np.uint32, np.int64,
-            np.uint64, np.float32, np.float64, np.complex128,
-            np.str_, np.bytes_, int, float, np.longdouble,
-            np.clongdouble,
-        ]
-        expected_np_types = [
-            np.int8, np.float32, np.int32, np.uint32, np.int32,
-            np.uint32, np.float32, np.float64, np.complex128,
-            np.bytes_, np.bytes_, np.int32, np.float64, np.float64,
-            np.complex128,
-        ]
-        if hasattr(np, 'float96'):
-            valid_types.append(np.float96)
-            expected_np_types.append(np.float64)
-        if hasattr(np, 'float128'):
-            valid_types.append(np.float128)
-            expected_np_types.append(np.float64)
-        if hasattr(np, 'complex192'):
-            valid_types.append(np.complex192)
-            expected_np_types.append(np.complex128)
-        if hasattr(np, 'complex256'):
-            valid_types.append(np.complex256)
-            expected_np_types.append(np.complex128)
+    def test_builtin_numeric_types(self):
+        array = np.arange(10)
+        for type_ in set(np.sctypeDict.values()):
+            if np.issubdtype(type_, np.number):
+                with self.subTest(f'type: {type_.__name__}'):
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", category=TypeConversionWarning)
+                        w = IgorWave(array.astype(type_))
+                        outarray = w._cast_array()
+                        self.assertIn(outarray.dtype.type, TYPES)
+                        np.testing.assert_allclose(array, outarray)
 
-        for (vt, ent) in zip(valid_types, expected_np_types):
-            with self.subTest('type: %r' % vt):
-                wave = IgorWave(array.astype(vt), int64_support=False)
-                com = f'IGOR\nWAVES {ITX_TYPES[ent]} /N'
-                with open(OUTDIR / 'array_type_{}.ibw'.format(vt.__name__), 'wb') as fp:
-                    wave.save(fp)
-                    self.assertIs(wave._array_saved.dtype.type, ent)
-                    self.assertEqual(wave._wave_header.type, TYPES[ent])
-                with open(OUTDIR / 'array_type_{}.itx'.format(vt.__name__), 'w+t') as fp:
-                    wave.save_itx(fp)
+    def test_types(self):
+        array = np.arange(10)
+        for type_ in TYPES:
+            with self.subTest(f'type: {type_.__name__}'):
+                w_ibw = IgorWave(array.astype(type_), int64_support=True)
+                w_ibw.save(OUTDIR / f'types_{type_.__name__}.ibw')
+                self.assertEqual(w_ibw._wave_header.type, TYPES[type_])
+                w_itx = IgorWave(array.astype(type_), int64_support=True)
+                with open(OUTDIR / f'types_{type_.__name__}.itx', mode='w+t') as fp:
+                    w_itx.save_itx(fp)
                     fp.seek(0)
-                    content = fp.read()
-                    self.assertIn(com, content)
+                    contents = fp.read()
+                self.assertIn(f'WAVES {ITX_TYPES[type_]}', contents)
 
     def test_complex(self):
-        a = np.array([1+2j, 3+4j, 5+6j, 7+8j])
+        a = np.array([[1+2j, 3+4j, 5+6j], [7+8j, 9+10j, 11+12j]], dtype=np.complex128)
+        a_bytes = np.array([1, 2, 7, 8, 3, 4, 9, 10, 5, 6, 11, 12], dtype=np.float64).tobytes()
         w = IgorWave(a, 'complexwave')
         with open(OUTDIR / 'complex_wave.itx', 'w+t') as fp:
             w.save_itx(fp)
             fp.seek(0)
-            content = fp.read()
-            self.assertIn('WAVES /C/D', content)
-            self.assertIn('1.0\t2.0\n3.0\t4.0\n5.0\t6.0\n7.0\t8.0', content)
-        with open(OUTDIR / 'complex_wave.ibw', 'wb') as fp:
+            contents = fp.read()
+        self.assertIn('WAVES /C/D', contents)
+        self.assertIn('1.0\t2.0', contents)
+        with open(OUTDIR / 'complex_wave.ibw', 'w+b') as fp:
             w.save(fp)
+            fp.seek(0)
+            contents = fp.read()
+        self.assertIn(a_bytes, contents)
 
     def test_bool_to_itx(self):
         a = np.array([True, True, True, True, True], dtype=np.bool_)
         w = IgorWave(a, 'boolwave')
         with open(OUTDIR / 'bool_to_itx.itx', 'w+t') as fp:
-            w.save_itx(fp)
+            self.assertWarns(TypeConversionWarning, w.save_itx, fp)
             fp.seek(0)
             self.assertRegex(fp.read(), r'BEGIN\n1')
 
@@ -138,9 +132,16 @@ class WaveTestCase(unittest.TestCase):
         a = np.array([2**63 - 1]*10, dtype=np.int64)
         an = -a
         au = np.array([2**63 - 1]*10, dtype=np.uint64)
-        self.assertRaises(OverflowError, IgorWave(a).save, OUTDIR/'int64_overflow.ibw')
-        self.assertRaises(OverflowError, IgorWave(an).save, OUTDIR/'int64_overflow.ibw')
-        self.assertRaises(OverflowError, IgorWave(au).save, OUTDIR/'int64_unsigned_overflow.ibw')
+        wa = IgorWave(a)
+        wan = IgorWave(an)
+        wau = IgorWave(au)
+        self.assertWarns(TypeConversionWarning, wa.save, OUTDIR/'int64_overflow.ibw')
+        self.assertWarns(TypeConversionWarning, wan.save, OUTDIR/'int64_overflow2.ibw')
+        self.assertWarns(TypeConversionWarning, wau.save, OUTDIR/'int64_unsigned_overflow.ibw')
+        self.assertEqual(wa._array_saved.dtype, 'float64')
+        self.assertEqual(wan._array_saved.dtype, 'float64')
+        self.assertEqual(wau._array_saved.dtype, 'float64')
+
         w = IgorWave(a, int64_support=True)
         w.save(OUTDIR/'int64.ibw')
         self.assertEqual(w._wave_header.type, 0x80)
@@ -159,6 +160,27 @@ class WaveTestCase(unittest.TestCase):
             fp.seek(0)
             content = fp.read()
             self.assertRegex(content, com)
+
+    def test_multidim(self):
+        array = np.zeros((2, 3, 4, 5), dtype=np.object_)
+        for i in range(2):
+            for j in range(3):
+                for k in range(4):
+                    for l in range(5):
+                        array[i, j, k, l] = f'({i},{j},{k},{l})'
+        array = array.astype(np.str_)
+        w_1d = IgorWave(array[:, 0, 0, 0], 'multidim_1d')
+        w_1d.save(OUTDIR / 'multidim_1d.ibw')
+        w_1d.save_itx(OUTDIR / 'multidim_1d.itx')
+        w_2d = IgorWave(array[:, :, 0, 0], 'multidim_2d')
+        w_2d.save(OUTDIR / 'multidim_2d.ibw')
+        w_2d.save_itx(OUTDIR / 'multidim_2d.itx')
+        w_3d = IgorWave(array[:, :, :, 0], 'multidim_3d')
+        w_3d.save(OUTDIR / 'multidim_3d.ibw')
+        w_3d.save_itx(OUTDIR / 'multidim_3d.itx')
+        w_4d = IgorWave(array[:, :, :, :], 'multidim_4d')
+        w_4d.save(OUTDIR / 'multidim_4d.ibw')
+        w_4d.save_itx(OUTDIR / 'multidim_4d.itx')
 
     def test_dimscale(self):
         array = np.random.randint(0, 100, 10, dtype=np.int32)
@@ -211,7 +233,7 @@ class WaveTestCase(unittest.TestCase):
         wavename = 'wave_with_note'
         note = 'A\nB\nC'
         com = 'X Note \'wave_with_note\', "A\\nB\\nC"'
-        wave = IgorWave([1, 2, 3], name=wavename)
+        wave = IgorWave([1.0, 2.0, 3.0], name=wavename)
         wave.set_note(note)
         with open(OUTDIR / 'note.ibw', 'wb') as fp:
             wave.save(fp)
@@ -250,11 +272,11 @@ class WaveTestCase(unittest.TestCase):
         self.assertEqual(wave.name, name.replace('\'', '_'))
 
     def test_multiwave_itx(self):
-        a = np.random.random(size=2*3*4*2)
-        w1 = IgorWave(a, 'w_1d')
-        w2 = IgorWave(a.reshape((2, -1)), 'w_2d')
-        w3 = IgorWave(a.reshape((2, 3, -1)), 'w_3d')
-        w4 = IgorWave(a.reshape((2, 3, 4, -1)), 'w_4d')
+        a = np.arange(10, dtype=np.int32)
+        w1 = IgorWave(a, 'w1')
+        w2 = IgorWave(a, 'w2')
+        w3 = IgorWave(a, 'w3')
+        w4 = IgorWave(a, 'w4')
         with open(OUTDIR / 'multiwave_itx.itx', 'w+t') as fp:
             w1.save_itx(fp)
             w2.save_itx(fp)
@@ -325,7 +347,6 @@ class WaveTestCase(unittest.TestCase):
             self.assertEqual(w._bin_header.dimLabelsSize[0], 0)
             self.assertFalse(w._dimension_labels[0])
 
-
     def test_textwave(self):
         a = np.array(['a', 'bb', 'ccc', 'dddd', 'eeeee', 'ffffff'])
         w = IgorWave(a, 'mytextwave')
@@ -346,14 +367,6 @@ class WaveTestCase(unittest.TestCase):
             string = fp.read()
             self.assertRegex(string, r'"a"')
         with open(OUTDIR / 'textwave_from_bytes.ibw', 'wb') as fp:
-            w.save(fp)
-
-    def test_textwave_multidim(self):
-        a = np.array([str(x)*np.random.randint(1, 10) for x in 'abcdefghijklmnop']).reshape((2, 2, 2, 2))
-        w = IgorWave(a, 'my4dtextwave')
-        with open(OUTDIR / 'textwave_multidim.itx', 'w+t') as fp:
-            w.save_itx(fp)
-        with open(OUTDIR / 'textwave_multidim.ibw', 'wb') as fp:
             w.save(fp)
 
     def test_textwave_special_chars(self):
@@ -426,18 +439,42 @@ class WaveTestCase(unittest.TestCase):
             f.read()
 
     def test_image_mode(self):
-        a = np.array([[1, 2, 3], [4, 5, 6]])
-        w = IgorWave(a, 'imagewave')
-        a1 = w._check_array()
-        a2 = w._check_array(image=True)
-        np.testing.assert_allclose(a, a1)
-        np.testing.assert_allclose(a.T, a2)
-        w.save(OUTDIR / 'imagewave_tr.ibw', image=True)
-        np.testing.assert_array_equal(w._wave_header.nDim, (3, 2, 0, 0))
-        w.save_itx(OUTDIR / 'imagewave_tr.itx', image=True)
-        w.save(OUTDIR / 'imagewave.ibw')
-        np.testing.assert_array_equal(w._wave_header.nDim, (2, 3, 0, 0))
-        w.save_itx(OUTDIR / 'imagewave.itx')
+        a = np.arange(1*2*3*4, dtype=np.int32)
+        # 1d
+        w = IgorWave(a, 'imagewave1d')
+        np.testing.assert_allclose(a, w._check_array(image=False))
+        np.testing.assert_allclose(a, w._check_array(image=True))
+        w.save_itx(OUTDIR / 'imgwave_1d_norm.itx')
+        w.save_itx(OUTDIR / 'imgwave_1d_img.itx', image=True)
+        w.save(OUTDIR / 'imgwave_1d_norm.ibw')
+        w.save(OUTDIR / 'imgwave_1d_img.ibw', image=True)
+        # 2d
+        a_2d = a.reshape((6, 4))
+        w = IgorWave(a_2d, 'imagewave2d')
+        np.testing.assert_allclose(a_2d, w._check_array(image=False))
+        np.testing.assert_allclose(a_2d.T, w._check_array(image=True))
+        w.save_itx(OUTDIR / 'imgwave_2d_norm.itx')
+        w.save_itx(OUTDIR / 'imgwave_2d_img.itx', image=True)
+        w.save(OUTDIR / 'imgwave_2d_norm.ibw')
+        w.save(OUTDIR / 'imgwave_2d_img.ibw', image=True)
+        # 3d
+        a_3d = a.reshape((2, 3, 4))
+        w = IgorWave(a_3d, 'imagewave3d')
+        np.testing.assert_allclose(a_3d, w._check_array(image=False))
+        np.testing.assert_allclose(np.transpose(a_3d, (1, 0, 2)), w._check_array(image=True))
+        w.save_itx(OUTDIR / 'imgwave_3d_norm.itx')
+        w.save_itx(OUTDIR / 'imgwave_3d_img.itx', image=True)
+        w.save(OUTDIR / 'imgwave_3d_norm.ibw')
+        w.save(OUTDIR / 'imgwave_3d_img.ibw', image=True)
+        # 4d
+        a_4d = a.reshape((1, 2, 3, 4))
+        w = IgorWave(a_4d, 'imagewave4d')
+        np.testing.assert_allclose(a_4d, w._check_array(image=False))
+        np.testing.assert_allclose(np.transpose(a_4d, (1, 0, 2, 3)), w._check_array(image=True))
+        w.save_itx(OUTDIR / 'imgwave_4d_norm.itx')
+        w.save_itx(OUTDIR / 'imgwave_4d_img.itx', image=True)
+        w.save(OUTDIR / 'imgwave_4d_norm.ibw')
+        w.save(OUTDIR / 'imgwave_4d_img.ibw', image=True)
 
     def test_pandas_series(self):
         import pandas as pd
