@@ -13,7 +13,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='igorwriter',
-    version='0.6.0',
+    version='0.7.0',
     description='Write IGOR binary (.ibw) or text (.itx) files from numpy array',
     long_description=long_description,
     long_description_content_type='text/markdown',
