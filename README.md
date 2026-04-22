@@ -1,21 +1,31 @@
 ⚠️ **Project Status: Deprecated**
 
-IgorWriter was originally developed to export NumPy arrays to IGOR Pro via `.ibw` and `.itx` files.
+IgorWriter was a library for exporting NumPy arrays to IGOR Pro
+(`.ibw` and `.itx` formats).
 
-However, starting from **Igor Pro 10**, WaveMetrics provides official Python integration that enables
-direct data exchange between Python and IGOR without intermediate file formats.
+Starting from **Igor Pro 10**, official Python integration is available
+for direct data exchange between Python and IGOR. This supersedes the
+main purpose of this library.
 
-The official Python integration provides not only file export functionality,
-but also direct, in-memory interaction with IGOR waves, making it a strictly more powerful alternative.
+As a result, **development of IgorWriter has been discontinued**.
 
-Due to this major improvement, the primary use case of this library has been effectively superseded.
-Therefore, development of IgorWriter has been **discontinued**.
+## Maintenance policy
 
-This project is kept for:
-- Users of older Igor Pro versions (≤ 9)
-- Legacy workflows relying on `.ibw` / `.itx` export
+* No new features will be added
+* Only **bug fixes** may be addressed on a best-effort basis
+* No guarantees on response time or long-term support
 
-👉 For new projects, please use the official integration:
+## When should you use this?
+
+This package may still be useful if:
+
+* You are using Igor Pro ≤ 9
+* You rely on `.ibw` / `.itx` file-based workflows
+* You need compatibility with existing scripts
+
+## For new projects
+
+Please use the official Python integration provided by WaveMetrics:
 https://www.wavemetrics.com/products/igorpro/python
 
 # IgorWriter
